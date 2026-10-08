@@ -21,7 +21,7 @@ GeckoView(Firefox 엔진)를 포함해서 CPU(ABI)별로 APK 를 따로 만든�
 | arm | `.../arm/release/app-arm-release.apk` → `D-Player-<버전>-armv7.apk` | 32비트 차량 |
 | x64 | `.../x64/release/app-x64-release.apk` → `D-Player-<버전>-x64.apk` | 에뮬레이터 시험용 (배포 안 함) |
 
-차량에는 `dist/D-Player-0.14-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
+차량에는 `dist/D-Player-0.15-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
 
 ## 권한: 알림 접근 (자동)
 
@@ -63,11 +63,12 @@ adb shell cmd notification allow_listener com.dolphin.mplayer/.MediaListenerServ
 - **전체화면**: 평소엔 플레이 화면만 크게 표시. 오른쪽 위 **노래 리스트 버튼**으로 리스트 창 열기/닫기.
   리스트는 재생 대기열(노래 목록)을 먼저 보여주고, 대기열이 없으면 앱 라이브러리를 보여줌. 리스트 헤더를 탭하면 대기열 ↔ 라이브러리 전환.
 - **실행 시 화면 분할**(설정 → 실행 시 화면 분할): 분할하지 않음 / 5:5 / 7:3, 왼쪽 앱·오른쪽 앱(기본 D-Player) 선택.
-  앱 아이콘으로 열면 차량 ADB 로 `am start --windowingMode 3/4` 를 실행해 분할화면을 만들고, 7:3 이면 분할선을 드래그한다
-  (Android 가 정한 위치로 맞춰져 약 2/3 지점). '지금 분할 실행'으로 바로 적용.
+  앱 아이콘으로 열면 차량 ADB 로 `am start --windowingMode 3/4` 를 실행해 분할화면을 만들고, shell 권한으로
+  `app_process` 에서 `shell/SplitTool` 을 돌려 `resizeDockedStack` 으로 정확한 비율(0.7 / 0.5)을 맞춘다.
+  (분할선 드래그는 차량마다 멈출 수 있는 위치가 달라 분할이 풀리기도 함) 실행 기록: 차량 `/data/local/tmp/dplayer_split.log`.
 - **분할화면**(`isInMultiWindowMode` 또는 창 폭 720dp 미만): 플레이 화면만 표시. 위쪽 **라이브러리** 버튼을 누르면
   플레이 화면 자리에 노래 리스트가 뜨고, 왼쪽 위 ← 로 돌아감.
-- 왼쪽 위 **설정**(톱니바퀴): 업데이트 확인, 시작 시 자동 업데이트 확인 켜기/끄기, 권한 다시 설정, YouTube 로그인/로그아웃.
+- 왼쪽 위 **설정**(톱니바퀴): 전체 화면 설정 — 화면 분할 · 재생(라이브러리 자동 닫기) · 계정(YouTube / Spotify 웹) · 권한 · 업데이트 · 정보.
 
 ## YouTube Music / YouTube
 
