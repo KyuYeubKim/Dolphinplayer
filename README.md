@@ -21,7 +21,7 @@ GeckoView(Firefox 엔진)를 포함해서 CPU(ABI)별로 APK 를 따로 만든�
 | arm | `.../arm/release/app-arm-release.apk` → `D-Player-<버전>-armv7.apk` | 32비트 차량 |
 | x64 | `.../x64/release/app-x64-release.apk` → `D-Player-<버전>-x64.apk` | 에뮬레이터 시험용 (배포 안 함) |
 
-차량에는 `dist/D-Player-0.17-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
+차량에는 `dist/D-Player-0.18-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
 
 ## 권한: 알림 접근 (자동)
 
@@ -29,9 +29,15 @@ GeckoView(Firefox 엔진)를 포함해서 CPU(ABI)별로 APK 를 따로 만든�
 권한이 없으면 앱이 실행되자마자 **차량 자신의 ADB(127.0.0.1:5555)에 접속해 스스로 권한을 부여**합니다
 (Dolphin Control 과 같은 방식, `adb/AdbClient.java` 는 Dolphin Control 에서 가져옴).
 
-1. 앱 실행 → 자동으로 ADB 접속 시작
-2. 차량 화면에 **"USB 디버깅을 허용하시겠습니까?"** 창이 뜨면 *항상 허용* 체크 후 **[허용]** (최대 60초 대기, 남은 시간 표시)
-3. 권한이 부여되면 바로 플레이어 화면으로 전환
+1. 앱 실행(또는 설정 → 권한 다시 설정) → 자동으로 ADB 접속 시작
+2. 차량 화면에 **"USB 디버깅을 허용하시겠습니까?"** 창이 뜨면 **이 컴퓨터에서 항상 허용** 체크 후 **[허용]**
+   (한 번 접속에 20초 대기, 허용 직후 새 연결을 요구하는 adbd 에 맞춰 1.2초 간격으로 최대 4번 재접속 — Dolphin Control 과 같은 방식.
+   허용 창이 떠 있는 동안에는 다른 연결을 열지 않는다)
+3. 한 번에 모두 부여: 알림 접근 · USB/SD 읽기 · 알림 표시 · 백그라운드 재생 허용
+4. 새 연결로 '항상 허용'이 저장됐는지 확인 → 결과 표시
+
+이후 **화면 분할 · 자동 업데이트 · 저장소 권한은 허용 창 없이** 같은 키로 조용히 동작한다
+(운전 중 허용 창이 갑자기 뜨지 않도록 이들은 허용 창을 띄우지 않으며, 키가 등록돼 있지 않으면 '권한 다시 설정'을 안내).
 
 실패하면 [다시 시도] 버튼과 원인이 표시되고, 안내 문구를 탭하면 연결 로그를 볼 수 있습니다.
 
@@ -63,8 +69,9 @@ adb shell cmd notification allow_listener com.dolphin.mplayer/.MediaListenerServ
 - **전체화면**: 평소엔 플레이 화면만 크게 표시. 오른쪽 위 **노래 리스트 버튼**으로 리스트 창 열기/닫기.
   리스트는 재생 대기열(노래 목록)을 먼저 보여주고, 대기열이 없으면 앱 라이브러리를 보여줌. 리스트 헤더를 탭하면 대기열 ↔ 라이브러리 전환.
 - **실행 시 화면 분할**(설정 → 실행 시 화면 분할): 분할하지 않음 / 5:5 / 7:3, 왼쪽 앱·오른쪽 앱(기본 D-Player) 선택.
-  앱 아이콘으로 열면 차량 ADB 로 `am start --windowingMode 3/4` 를 실행해 분할화면을 만들고, shell 권한으로
-  `app_process` 에서 `shell/SplitTool` 을 돌려 `resizeDockedStack` 으로 정확한 비율(0.7 / 0.5)을 맞춘다.
+  앱 아이콘으로 열면 차량 ADB(shell 권한)로 `app_process` 에서 `shell/SplitTool` 을 돌려
+  ① 기존 분할 풀기(`dismissSplitScreenMode`) ② 왼쪽 앱 실행 후 그 작업을 분할 왼쪽 창으로(`setTaskWindowingModeSplitScreenPrimary`,
+  이미 실행 중인 앱도 분할됨) ③ 오른쪽 앱을 `am start --windowingMode 4` ④ `resizeDockedStack` 으로 정확한 비율(0.7 / 0.5).
   (분할선 드래그는 차량마다 멈출 수 있는 위치가 달라 분할이 풀리기도 함) 실행 기록: 차량 `/data/local/tmp/dplayer_split.log`.
 - **분할화면**(`isInMultiWindowMode` 또는 창 폭 720dp 미만): 플레이 화면만 표시. 위쪽 **라이브러리** 버튼을 누르면
   플레이 화면 자리에 노래 리스트가 뜨고, 왼쪽 위 ← 로 돌아감.
