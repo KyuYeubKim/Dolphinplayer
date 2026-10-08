@@ -21,7 +21,7 @@ GeckoView(Firefox 엔진)를 포함해서 CPU(ABI)별로 APK 를 따로 만든�
 | arm | `.../arm/release/app-arm-release.apk` → `D-Player-<버전>-armv7.apk` | 32비트 차량 |
 | x64 | `.../x64/release/app-x64-release.apk` → `D-Player-<버전>-x64.apk` | 에뮬레이터 시험용 (배포 안 함) |
 
-차량에는 `dist/D-Player-0.16-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
+차량에는 `dist/D-Player-0.17-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
 
 ## 권한: 알림 접근 (자동)
 
