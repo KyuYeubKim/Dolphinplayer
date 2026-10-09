@@ -21,7 +21,7 @@ GeckoView(Firefox 엔진)를 포함해서 CPU(ABI)별로 APK 를 따로 만든�
 | arm | `.../arm/release/app-arm-release.apk` → `D-Player-<버전>-armv7.apk` | 32비트 차량 |
 | x64 | `.../x64/release/app-x64-release.apk` → `D-Player-<버전>-x64.apk` | 에뮬레이터 시험용 (배포 안 함) |
 
-차량에는 `dist/D-Player-0.19-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
+차량에는 `dist/D-Player-0.20-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
 
 ## 권한: 알림 접근 (자동)
 
@@ -75,6 +75,8 @@ adb shell cmd notification allow_listener com.dolphin.mplayer/.MediaListenerServ
   (분할선 드래그는 차량마다 멈출 수 있는 위치가 달라 분할이 풀리기도 함) 실행 기록: 차량 `/data/local/tmp/dplayer_split.log`.
 - **분할화면**(`isInMultiWindowMode` 또는 창 폭 720dp 미만): 플레이 화면만 표시. 위쪽 **라이브러리** 버튼을 누르면
   플레이 화면 자리에 노래 리스트가 뜨고, 왼쪽 위 ← 로 돌아감.
+- **상단 바 재생 정보**(설정 → 재생): 재생 중인 곡의 제목 · 가수를 '다른 앱 위에 표시' 창으로 화면 맨 위에 띄움 (`StatusTicker`, 알림 접근 서비스 안에서 동작).
+  Android 8+ 에서 이 창은 상단 바 아래층이라 불투명한 상단 바에는 가려질 수 있어 '상단 바 아래' 위치도 제공.
 - 왼쪽 위 **설정**(톱니바퀴): 전체 화면 설정 — 화면 분할 · 재생(라이브러리 자동 닫기) · 계정(YouTube / Spotify 웹) · 권한 · 업데이트 · 정보.
 
 ## YouTube Music / YouTube
