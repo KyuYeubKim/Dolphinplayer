@@ -5,7 +5,7 @@ Spotify API 없이 Android **MediaSession** 으로 지금 재생 중인 음악 �
 읽어서 곡 정보를 보여주고 제어합니다. 로그인·API 키 불필요.
 
 기능: 현재 곡(제목/아티스트/커버/진행바) · 재생 · 일시정지 · 정지 · 이전/다음 곡 · 셔플 · 라이브러리/대기열 · 재생 앱 전환
-· **YouTube Music**(내 재생목록을 라이브러리에서 재생) · **YouTube**(전체화면) — 차량에 공식 앱이 없어도 Premium 계정으로 사용
+· **YouTube Music**(노래 검색 · 홈 추천 · 내 재생목록을 라이브러리에서 재생) · **YouTube**(전체화면) — 차량에 공식 앱이 없어도 Premium 계정으로 사용
 
 ## 설치
 
@@ -21,7 +21,7 @@ GeckoView(Firefox 엔진)를 포함해서 CPU(ABI)별로 APK 를 따로 만든�
 | arm | `.../arm/release/app-arm-release.apk` → `D-Player-<버전>-armv7.apk` | 32비트 차량 |
 | x64 | `.../x64/release/app-x64-release.apk` → `D-Player-<버전>-x64.apk` | 에뮬레이터 시험용 (배포 안 함) |
 
-차량에는 `dist/D-Player-0.31-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
+차량에는 `dist/D-Player-0.32-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
 
 ## 권한: 알림 접근 (자동)
 
@@ -89,14 +89,14 @@ adb shell cmd notification allow_listener com.dolphin.mplayer/.MediaListenerServ
 재생은 YouTube 웹이 직접 하므로 Premium(광고 없음 등)이 그대로 적용된다.
 
 1. **설정 → YouTube 로그인**: Google 로그인 화면에서 Premium 계정으로 1회 로그인 (로그인 정보는 앱에 저장)
-2. 플레이 화면 위쪽 **YT Music**: 플레이어를 YouTube Music 으로 고르면 라이브러리에 내 재생목록(좋아요 표시한 음악 포함)이 뜬다 → 재생목록 → 곡 또는 **전체 재생**
+2. 플레이 화면 위쪽 **YT Music**: 플레이어를 YouTube Music 으로 고르면 라이브러리 첫 화면에 **노래 검색** · **내 재생목록**(좋아요 표시한 음악 포함) · **홈 추천**(오늘의 발견, 맞춤 믹스 등)이 뜬다 → 곡, 또는 앨범·재생목록·믹스 안으로 들어가 곡 / **전체 재생**
    재생은 화면 없이 뒤에서 되고, 곡 정보·커버·진행바는 **왼쪽 플레이 화면**에 표시. 버튼·핸들 미디어 버튼으로 제어
 3. 플레이 화면 위쪽 **YouTube**: YouTube 를 전체화면으로 연다 (← 또는 뒤로 가기로 닫기)
 
 플레이 화면 왼쪽 위 아이콘 = 플레이어 선택: **Spotify**(차량 기본 앱. 꺼져 있으면 열어서 재생 시작) · **YouTube Music** · **YouTube**(전체화면).
 선택된 플레이어는 아이콘에 흰 링. 고른 플레이어는 고정되고, 다른 앱이 새로 재생을 시작하면 그 앱으로 자동 전환.
 
-라이브러리는 항상 **지금 플레이어**의 목록: YT Music 이면 내 재생목록, 다른 앱(⇄ 로 선택하거나 그 앱이 재생을 시작하면 자동 전환)이면 그 앱의 대기열/라이브러리.
+라이브러리는 항상 **지금 플레이어**의 목록: YT Music 이면 검색 · 홈 추천 · 내 재생목록, 다른 앱(⇄ 로 선택하거나 그 앱이 재생을 시작하면 자동 전환)이면 그 앱의 대기열/라이브러리.
 
 구조 (`youtube/`):
 - `YtEngine.kt`: GeckoRuntime + 페이지 2개(MUSIC: 화면 없이 목록·재생, VIDEO: 전체화면). 웹의 `navigator.mediaSession` 을
