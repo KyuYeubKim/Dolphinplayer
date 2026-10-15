@@ -21,7 +21,7 @@ GeckoView(Firefox 엔진)를 포함해서 CPU(ABI)별로 APK 를 따로 만든�
 | arm | `.../arm/release/app-arm-release.apk` → `D-Player-<버전>-armv7.apk` | 32비트 차량 |
 | x64 | `.../x64/release/app-x64-release.apk` → `D-Player-<버전>-x64.apk` | 에뮬레이터 시험용 (배포 안 함) |
 
-차량에는 `dist/D-Player-0.38-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
+차량에는 `dist/D-Player-0.39-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
 
 ## 권한: 알림 접근 (자동)
 
@@ -80,6 +80,9 @@ adb shell cmd notification allow_listener com.dolphin.mplayer/.MediaListenerServ
   플레이 화면 자리에 노래 리스트가 뜨고, 왼쪽 위 ← 로 돌아감.
 - **재생 정보 표시 (화면 아래)**(설정 → 재생, 켜기/끄기): 재생 중인 곡의 제목 · 가수를 '다른 앱 위에 표시' 창으로 하단 바 바로 위 가운데에 띄움
   (`StatusTicker`, 알림 접근 서비스 안에서 동작). 차량 상단 바(SystemUI)는 불투명하고 앱 창보다 위층이라 그 안에는 띄울 수 없음.
+- **앱 바로가기 (0.39~)**: 위쪽 플레이어 버튼(Spotify · YT Music · YouTube · USB) 오른쪽에 앱 버튼 최대 4개 (기본: 설치돼 있으면 D-Phone · 차량 Spotify).
+  설정 → 재생 → 바로가기 앱, 또는 버튼을 길게 눌러 고름. 연 앱 위에 초록 **← 돌아가기** 버튼이 떠서 누르면 D-Player 로 돌아옴
+  (끌어서 옮기기 · 위치 기억, `ReturnBubble`). 그 앱에서 뒤로 가기로도 돌아옴.
 - 왼쪽 위 **설정**(톱니바퀴): 전체 화면 설정 — 화면 분할 · 재생(라이브러리 자동 닫기) · 계정(YouTube / Spotify 웹) · 권한 · 업데이트 · 정보.
 
 ## YouTube Music / YouTube
