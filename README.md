@@ -21,7 +21,7 @@ GeckoView(Firefox 엔진)를 포함해서 CPU(ABI)별로 APK 를 따로 만든�
 | arm | `.../arm/release/app-arm-release.apk` → `D-Player-<버전>-armv7.apk` | 32비트 차량 |
 | x64 | `.../x64/release/app-x64-release.apk` → `D-Player-<버전>-x64.apk` | 에뮬레이터 시험용 (배포 안 함) |
 
-차량에는 `dist/D-Player-0.51-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
+차량에는 `dist/D-Player-0.52-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
 
 ## 권한: 알림 접근 (자동)
 
@@ -36,10 +36,10 @@ GeckoView(Firefox 엔진)를 포함해서 CPU(ABI)별로 APK 를 따로 만든�
 3. 한 번에 모두 부여: 알림 접근 · USB/SD 읽기 · 알림 표시 · 백그라운드 재생 허용
 4. 새 연결로 '항상 허용'이 저장됐는지 확인 → 결과 표시
 
-설치 후 한 번만 자동으로 묻고, '지금 분할 실행' 때 승인 전이면 바로 권한 설정으로 이어진다.
+설치 후 한 번만 자동으로 묻는다.
 허용 창이 닫히면(앱 화면 복귀) 2초 뒤 바로 새 연결로 확인. 진단 기록은 `Download/D-Player/logs/` 에 자동 저장 (`adb/AdbDiag.kt`).
 
-이후 **화면 분할 · 자동 업데이트 · 저장소 권한은 허용 창 없이** 같은 키로 조용히 동작한다
+이후 **자동 업데이트 · 저장소 권한은 허용 창 없이** 같은 키로 조용히 동작한다
 (운전 중 허용 창이 갑자기 뜨지 않도록 이들은 허용 창을 띄우지 않으며, 키가 등록돼 있지 않으면 '권한 다시 설정'을 안내).
 
 실패하면 [다시 시도] 버튼과 원인이 표시되고, 안내 문구를 탭하면 연결 로그를 볼 수 있습니다.
@@ -71,11 +71,7 @@ adb shell cmd notification allow_listener com.dolphin.mplayer/.MediaListenerServ
 
 - **전체화면**: 평소엔 플레이 화면만 크게 표시. 오른쪽 위 **노래 리스트 버튼**으로 리스트 창 열기/닫기.
   리스트는 재생 대기열(노래 목록)을 먼저 보여주고, 대기열이 없으면 앱 라이브러리를 보여줌. 리스트 헤더를 탭하면 대기열 ↔ 라이브러리 전환.
-- **실행 시 화면 분할**(설정 → 실행 시 화면 분할): 분할하지 않음 / 5:5 / 7:3, 왼쪽 앱·오른쪽 앱(기본 D-Player) 선택.
-  앱 아이콘으로 열면 차량 ADB(shell 권한)로 `app_process` 에서 `shell/SplitTool` 을 돌려
-  ① 기존 분할 풀기(`dismissSplitScreenMode`) ② 왼쪽 앱 실행 후 그 작업을 분할 왼쪽 창으로(`setTaskWindowingModeSplitScreenPrimary`,
-  이미 실행 중인 앱도 분할됨) ③ 오른쪽 앱을 `am start --windowingMode 4` ④ `resizeDockedStack` 으로 정확한 비율(0.7 / 0.5).
-  (분할선 드래그는 차량마다 멈출 수 있는 위치가 달라 분할이 풀리기도 함) 실행 기록: 차량 `/data/local/tmp/dplayer_split.log`.
+- **화면 분할**: DolphinControl 이 맡는다 (D-Player 자체 분할 기능은 0.52 에서 제거). D-Player 는 분할 칸에 맞춰 화면 배치만 바꾼다.
 - **분할화면**(`isInMultiWindowMode` 또는 창 폭 720dp 미만): 플레이 화면만 표시. 위쪽 **라이브러리** 버튼을 누르면
   플레이 화면 자리에 노래 리스트가 뜨고, 왼쪽 위 ← 로 돌아감.
 - **재생 정보 표시 (화면 아래)**(설정 → 재생, 켜기/끄기): 재생 중인 곡의 제목 · 가수를 '다른 앱 위에 표시' 창으로 하단 바 바로 위 가운데에 띄움
@@ -83,7 +79,7 @@ adb shell cmd notification allow_listener com.dolphin.mplayer/.MediaListenerServ
 - **앱 바로가기 (0.39~)**: 위쪽 플레이어 버튼(Spotify · YT Music · YouTube · USB) 오른쪽에 앱 버튼 최대 4개 (기본: 설치돼 있으면 D-Phone · 차량 Spotify).
   설정 → 재생 → 바로가기 앱, 또는 버튼을 길게 눌러 고름. 연 앱 위에 초록 **← 돌아가기** 버튼이 떠서 누르면 D-Player 로 돌아옴
   (끌어서 옮기기 · 위치 기억, `ReturnBubble`). 그 앱에서 뒤로 가기로도 돌아옴.
-- 왼쪽 위 **설정**(톱니바퀴): 전체 화면 설정 — 화면 분할 · 재생(라이브러리 자동 닫기) · 계정(YouTube / Spotify 웹) · 권한 · 업데이트 · 정보.
+- 왼쪽 위 **설정**(톱니바퀴): 전체 화면 설정 — 재생(라이브러리 자동 닫기) · 계정(YouTube / Spotify 웹) · 권한 · 업데이트 · 정보.
 
 ## YouTube Music / YouTube
 
