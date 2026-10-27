@@ -5,11 +5,14 @@ Spotify API 없이 Android **MediaSession** 으로 지금 재생 중인 음악 �
 읽어서 곡 정보를 보여주고 제어합니다. 로그인·API 키 불필요.
 
 기능: 현재 곡(제목/아티스트/커버/진행바) · 재생 · 일시정지 · 정지 · 이전/다음 곡 · 셔플 · 라이브러리/대기열 · 재생 앱 전환
-· **YouTube Music**(노래 검색 · 홈 추천 · 내 재생목록을 라이브러리에서 재생) · **YouTube**(전체화면) — 차량에 공식 앱이 없어도 Premium 계정으로 사용
+· **YouTube Music**(노래 검색 · 홈 · 내 재생목록을 라이브러리에서 재생) · **YouTube**(영상 전체화면) — 차량에 공식 앱이 없어도 Premium 계정으로 사용
+
+**오픈소스**: D-Player 는 [GNU GPL v3](LICENSE) 입니다. YouTube 재생에 [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor)(GPL v3)를 씁니다.
 
 ## 설치
 
-GeckoView(Firefox 엔진)를 포함해서 CPU(ABI)별로 APK 를 따로 만든다 (각 약 90MB).
+CPU(ABI)별 이름으로 APK 를 만든다 (각 약 5MB — 0.65 까지는 GeckoView 때문에 약 90MB 였고, 업데이트가 이 이름으로 파일을 찾아 그대로 둠).
+직접 빌드하면 서명 키가 달라 차에 설치된 D-Player 위로 덮어쓸 수 없다 (지우고 새로 설치).
 
 ```bash
 ./gradlew assembleArm64Release assembleArmRelease assembleX64Release
@@ -79,44 +82,35 @@ adb shell cmd notification allow_listener com.dolphin.mplayer/.MediaListenerServ
 - **앱 바로가기 (0.39~)**: 위쪽 플레이어 버튼(Spotify · YT Music · YouTube · USB) 오른쪽에 앱 버튼 최대 4개 (기본: 설치돼 있으면 D-Phone · 차량 Spotify).
   설정 → 재생 → 바로가기 앱, 또는 버튼을 길게 눌러 고름. 연 앱 위에 초록 **← 돌아가기** 버튼이 떠서 누르면 D-Player 로 돌아옴
   (끌어서 옮기기 · 위치 기억, `ReturnBubble`). 그 앱에서 뒤로 가기로도 돌아옴.
-- 왼쪽 위 **설정**(톱니바퀴): 전체 화면 설정 — 재생(라이브러리 자동 닫기) · 계정(YouTube / Spotify 웹) · 권한 · 업데이트 · 정보.
+- 왼쪽 위 **설정**(톱니바퀴): 전체 화면 설정 — 재생(라이브러리 자동 닫기) · 계정(YouTube) · 권한 · 업데이트 · 정보.
 
 ## YouTube Music / YouTube
 
-차량(DiLink)에는 공식 YouTube 앱이 없고 시스템 WebView 도 오래돼 Google 로그인이 막히므로,
-앱 안에 **GeckoView(Firefox 엔진)** 를 넣어 공식 웹(music.youtube.com / m.youtube.com)을 돌린다.
-재생은 YouTube 웹이 직접 하므로 Premium(광고 없음 등)이 그대로 적용된다.
+0.66 부터 웹 엔진 없이 **앱 플레이어**로 재생한다 (웹 재생은 차가 바쁘면 곡 넘김에 10초 넘게 걸렸음).
+YouTube 가 제공하는 공식 방식이 아니며, **YouTube Premium 계정으로 로그인해야만** 켜진다.
 
-1. **설정 → YouTube 로그인**: Google 로그인 화면에서 Premium 계정으로 1회 로그인 (로그인 정보는 앱에 저장)
-2. 플레이 화면 위쪽 **YT Music**: 플레이어를 YouTube Music 으로 고르면 라이브러리 첫 화면에 **노래 검색** · **내 재생목록**(좋아요 표시한 음악 포함) · **홈 추천**(오늘의 발견, 맞춤 믹스 등)이 뜬다 → 곡, 또는 앨범·재생목록·믹스 안으로 들어가 곡 / **전체 재생**
-   재생은 화면 없이 뒤에서 되고, 곡 정보·커버·진행바는 **왼쪽 플레이 화면**에 표시. 버튼·핸들 미디어 버튼으로 제어
-3. 플레이 화면 위쪽 **YouTube**: YouTube 를 전체화면으로 연다 (← 또는 뒤로 가기로 닫기)
-
-플레이 화면 왼쪽 위 아이콘 = 플레이어 선택: **Spotify**(차량 기본 앱. 꺼져 있으면 열어서 재생 시작) · **YouTube Music** · **YouTube**(전체화면).
-선택된 플레이어는 아이콘에 흰 링. 고른 플레이어는 고정되고, 다른 앱이 새로 재생을 시작하면 그 앱으로 자동 전환.
-
-라이브러리는 항상 **지금 플레이어**의 목록: YT Music 이면 검색 · 홈 추천 · 내 재생목록, 다른 앱(⇄ 로 선택하거나 그 앱이 재생을 시작하면 자동 전환)이면 그 앱의 대기열/라이브러리.
+1. **로그인 (TV 방식)**: 라이브러리의 안내(또는 설정 → YouTube)를 누르면 차 화면에 코드가 뜬다 → 휴대폰에서 `google.com/device` 에 들어가 코드를 넣고 허용. 비밀번호는 앱에 넣지 않는다. 프리미엄 계정이 아니면 연결을 바로 해제하고 쓰지 않는다.
+2. **YT Music**: 라이브러리에 노래 검색 · 내 재생목록(좋아요 표시한 음악 포함) · 홈(좋아하는 아티스트 · 최근 재생 · 믹스). 곡을 고르면 그 재생목록 / 라디오가 이어진다.
+3. **YouTube**: 영상 검색 · 맞춤 동영상 · 구독 · 기록 · 나중에 볼 동영상 → 전체화면 (라이브는 HLS). 화면을 닫으면 소리만 계속.
 
 구조 (`youtube/`):
-- `YtEngine.kt`: GeckoRuntime + 페이지 2개(MUSIC: 화면 없이 목록·재생, VIDEO: 전체화면). 웹의 `navigator.mediaSession` 을
-  Android MediaSession 으로 내보냄 → 기존 플레이 화면/MediaController 경로를 그대로 사용
+- `YtAuth.kt`: TV 방식(기기 코드) 로그인, 토큰은 앱 전용 설정에만, 프리미엄 확인
+- `YtApi.kt`: YouTube TV 앱이 받는 데이터(innertube TVHTML5)로 목록
+- `YtStreams.kt`: NewPipeExtractor 로 소리 · 영상 파일 주소
+- `YtEngine.kt`: ExoPlayer 로 재생 (캐시 150MB, 다음 곡 주소 · 앞부분 미리 받기), Android MediaSession 으로 내보냄 → 플레이 화면 · 핸들 버튼 그대로
 - `YtService.kt`: 백그라운드 재생 유지용 포그라운드 서비스 + 알림
-- `assets/dplayer_ext/`: 내장 확장. 페이지를 항상 '보이는 상태'로 유지(백그라운드 재생), 로그인 상태·재생목록·곡 목록을
-  로그인된 페이지 자신의 데이터 요청으로 가져와 앱에 전달, 셔플 등 명령 전달
 
-주의: YouTube 웹 구조가 바뀌면 목록 불러오기가 깨질 수 있다 (`content.js` 의 렌더러 이름 탐색 부분을 고치면 됨).
-Google 이 앱 내장 브라우저 정책을 바꾸면 로그인이 다시 막힐 수 있다.
+실패하면 웹으로 대신하지 않고 멈춘 뒤 이유를 진단 로그(설정 → 진단 로그 저장)에 남긴다. YouTube 가 방식을 바꾸면 NewPipeExtractor 를 올려야 다시 된다.
 
 ## Spotify 라이브러리
 
-1. 먼저 Spotify 앱의 라이브러리(MediaBrowser)를 읽는다 (차량 Spotify 는 보통 공개)
-2. 앱이 거절하면(휴대폰 Spotify 등) D-Player 안의 Firefox 엔진으로 **Spotify 웹(open.spotify.com)에 한 번 로그인**해
-   내 플레이리스트·곡 목록을 읽는다 (`assets/dplayer_ext/spotify.js`, 웹 플레이어 자신의 인증 토큰으로 Web API 조회)
-3. 재생은 Spotify 앱에 `playFromUri("spotify:playlist:…")` 명령 → 소리·재생 정보는 Spotify 앱 그대로
+1. Spotify 앱의 라이브러리(MediaBrowser)를 읽는다 (차량 Spotify 는 보통 공개)
+2. 앱이 거절하면 목록은 볼 수 없다 (0.65 까지 있던 Spotify 웹 로그인 예비 기능은 0.66 에서 웹 엔진과 함께 뺌). 재생 정보 · 버튼은 그대로
+3. 재생은 Spotify 앱에 명령 → 소리·재생 정보는 Spotify 앱 그대로
 
 ## USB / MicroSD (`local/`)
 
-위쪽 **USB 아이콘**: USB·SD 카드의 음악·영상을 D-Player 가 직접 재생 (ExoPlayer — GeckoView 에 이미 포함돼 크기 증가 거의 없음).
+위쪽 **USB 아이콘**: USB·SD 카드의 음악·영상을 D-Player 가 직접 재생 (ExoPlayer).
 
 - 라이브러리: 저장소(USB, SD 카드, 내부 저장소) → 폴더 → 파일. 폴더마다 **전체 재생 (셔플)**
 - 음악은 MediaSession(태그 `D-Player Local`)으로 내보내 플레이 화면·재생 목록·핸들 버튼이 그대로 동작
@@ -166,12 +160,19 @@ D-Player(이하 "앱")는 개인이 만들어 무료로 제공하는 비공식 �
 
 4. 외부 서비스
 Spotify, YouTube, YouTube Music 등은 각 회사의 서비스이며, 앱은 이 회사들과 관련이 없습니다. 각 상표는 해당 회사의 소유입니다. 외부 서비스의 이용 약관을 지키는 것과 계정 관리(로그인 정보, 이용 제한 등)는 사용자 책임입니다. 외부 서비스가 바뀌면 일부 기능이 동작하지 않을 수 있습니다.
+YouTube · YouTube Music 은 YouTube 웹 페이지가 아니라 앱 안의 플레이어로 재생합니다(YouTube 가 제공하는 공식 방식이 아님). YouTube Premium 계정으로 로그인해야 쓸 수 있으며, 이 방식은 YouTube 이용 약관에 맞지 않을 수 있고 계정이 제한될 가능성이 있습니다. YouTube 가 방식을 바꾸면 고쳐질 때까지 재생되지 않을 수 있습니다.
 
 5. 개인정보
-앱은 사용자의 계정 정보와 개인정보를 개발자에게 보내지 않습니다. 로그인 정보는 사용자의 기기 안에만 저장됩니다.
+앱은 사용자의 계정 정보와 개인정보를 개발자에게 보내지 않습니다(아래 8. 카페 닉네임은 예외). 로그인 정보는 사용자의 기기 안에만 저장됩니다.
 
-6. 책임의 제한
+6. 오픈소스
+앱은 GNU GPL v3 오픈소스이며 YouTube 재생에 NewPipeExtractor(GPL v3)를 씁니다. 소스: https://github.com/KyuYeubKim/Dolphinplayer
+
+7. 책임의 제한
 법이 허용하는 최대 범위에서, 개발자는 앱 사용 또는 사용하지 못한 것으로 생긴 직접적·간접적 손해(사고, 재산 피해, 데이터 손실, 계정 문제 등)에 대해 책임지지 않습니다.
 
-7. 동의
-위 내용에 동의하지 않으면 앱을 사용하지 마세요.
+8. 카페 닉네임
+사용자 확인과 공지를 위해 카페 닉네임(지역||닉네임||차량)을 등록합니다. 보내는 것은 카페 닉네임 · 앱 이름 · 버전 · 보낸 시각 · 설치할 때 만든 임의 번호이며, 차량·기기 정보는 보내지 않습니다. 앱 버전이 바뀌면 한 번 더 보냅니다.
+
+9. 동의
+아래에 카페 닉네임을 적고 [동의하고 시작]을 누르면 위 내용을 모두 읽고 이해했으며 이에 동의한 것으로 봅니다. 동의하지 않으면 본 앱을 사용할 수 없습니다.

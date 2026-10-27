@@ -1,0 +1,657 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg">
+
+    <!-- 권한 없음: ADB 자동 권한 설정 -->
+    <ScrollView
+        android:id="@+id/setupPanel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="520dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <TextView
+                android:id="@+id/setupTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/setup_title"
+                android:textColor="@color/text"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/setupStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_input"
+                android:gravity="center"
+                android:lineSpacingExtra="4dp"
+                android:minHeight="96dp"
+                android:text="@string/setup_help"
+                android:textColor="@color/text_dim"
+                android:textSize="15sp" />
+
+            <ProgressBar
+                android:id="@+id/setupSpinner"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginTop="12dp"
+                android:indeterminateTint="@color/accent"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btnAutoGrant"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/bg_pill"
+                android:stateListAnimator="@null"
+                android:text="@string/auto_grant"
+                android:textAllCaps="false"
+                android:textColor="#000000"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnOpenSettings"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="4dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:gravity="center"
+                android:text="@string/try_settings"
+                android:textColor="@color/text_dim"
+                android:textSize="14sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/setup_adb"
+                android:textColor="@color/text_dim"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_input"
+                android:fontFamily="monospace"
+                android:text="@string/adb_command"
+                android:textColor="@color/accent"
+                android:textIsSelectable="true"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- 플레이어: [리스트(왼쪽, 운전석 쪽)] + [플레이 화면] -->
+    <LinearLayout
+        android:id="@+id/playerPanel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <!-- 노래 리스트 (대기열 / 라이브러리) -->
+        <LinearLayout
+            android:id="@+id/listPane"
+            android:visibility="gone"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="6"
+            android:background="@color/surface"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <!-- 닫기 (분할화면에선 플레이 화면으로 돌아가기) -->
+                <ImageButton
+                    android:id="@+id/btnListClose"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_round_button"
+                    android:contentDescription="@string/close"
+                    android:padding="14dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_back" />
+
+                <!-- 탭하면 노래 리스트(대기열) ↔ 라이브러리 -->
+                <TextView
+                    android:id="@+id/listHeader"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:drawableEnd="@drawable/ic_swap"
+                    android:drawablePadding="8dp"
+                    android:ellipsize="end"
+                    android:gravity="center_vertical"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="20dp"
+                    android:singleLine="true"
+                    android:textColor="@color/text"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/divider" />
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <ListView
+                    android:id="@+id/library"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:divider="@null"
+                    android:paddingVertical="6dp"
+                    android:scrollbarStyle="outsideOverlay" />
+
+                <TextView
+                    android:id="@+id/emptyText"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:padding="24dp"
+                    android:text="@string/loading"
+                    android:textColor="@color/text_dim"
+                    android:textSize="18sp" />
+            </FrameLayout>
+        </LinearLayout>
+        <!-- 플레이 화면 -->
+        <FrameLayout
+            android:id="@+id/playerPane"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="5">
+
+        <!-- 화면이 낮아 앨범 이미지를 넣을 자리가 없을 때: 흐리게 깐 배경 이미지 (그 위에 재생 정보·버튼) -->
+        <ImageView
+            android:id="@+id/coverBackdrop"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:alpha="0.2"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/playerContent"
+            android:layout_width="520dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_horizontal"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="60dp"
+            android:paddingBottom="16dp">
+
+            <!-- 재생 앱 -->
+            <LinearLayout
+                android:id="@+id/btnSource"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:contentDescription="@string/cd_source"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="12dp">
+
+                <ImageView
+                    android:id="@+id/sourceIcon"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_music" />
+
+                <TextView
+                    android:id="@+id/sourceLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:ellipsize="end"
+                    android:maxWidth="280dp"
+                    android:singleLine="true"
+                    android:text="@string/no_session"
+                    android:textColor="@color/text_dim"
+                    android:textSize="14sp" />
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_marginStart="6dp"
+                    android:src="@drawable/ic_swap" />
+            </LinearLayout>
+
+            <ImageView
+                android:id="@+id/cover"
+                android:layout_width="260dp"
+                android:layout_height="260dp"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_cover"
+                android:clipToOutline="true"
+                android:padding="0dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/ic_music" />
+
+            <!-- 제목·가수 + 진행바. 차량 제어 패널이 보이면 한 줄로 (왼쪽 제목, 오른쪽 짧은 진행바, 0.62) -->
+            <LinearLayout
+                android:id="@+id/infoRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:gravity="center_vertical"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/titleBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="marquee"
+                        android:gravity="center"
+                        android:marqueeRepeatLimit="2"
+                        android:singleLine="true"
+                        android:text="@string/nothing_playing"
+                        android:textColor="@color/text"
+                        android:textSize="24sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/artist"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:ellipsize="end"
+                        android:gravity="center"
+                        android:singleLine="true"
+                        android:text="@string/start_music"
+                        android:textColor="@color/text_dim"
+                        android:textSize="16sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/progressBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:orientation="vertical">
+
+                    <ProgressBar
+                        android:id="@+id/progress"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="4dp"
+                        android:max="100"
+                        android:progressBackgroundTint="@color/surface2"
+                        android:progressTint="@color/accent" />
+
+                    <FrameLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp">
+
+                        <TextView
+                            android:id="@+id/timeElapsed"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="0:00"
+                            android:textColor="@color/text_dim"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/timeTotal"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="end"
+                            android:text="0:00"
+                            android:textColor="@color/text_dim"
+                            android:textSize="12sp" />
+                    </FrameLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 컨트롤 -->
+            <LinearLayout
+                android:id="@+id/ctrlRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <ImageButton
+                    android:id="@+id/btnShuffle"
+                    style="@style/CtrlButton"
+                    android:contentDescription="@string/cd_shuffle"
+                    android:src="@drawable/ic_shuffle" />
+
+                <ImageButton
+                    android:id="@+id/btnPrev"
+                    style="@style/CtrlButton"
+                    android:contentDescription="@string/cd_prev"
+                    android:src="@drawable/ic_prev" />
+
+                <FrameLayout
+                    android:layout_width="0dp"
+                    android:layout_height="80dp"
+                    android:layout_weight="1.3">
+
+                    <ImageButton
+                        android:id="@+id/btnPlay"
+                        android:layout_width="72dp"
+                        android:layout_height="72dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_play"
+                        android:contentDescription="@string/cd_play"
+                        android:scaleType="fitCenter"
+                        android:padding="18dp"
+                        android:src="@drawable/ic_play"
+                        android:tint="#000000" />
+                </FrameLayout>
+
+                <ImageButton
+                    android:id="@+id/btnNext"
+                    style="@style/CtrlButton"
+                    android:contentDescription="@string/cd_next"
+                    android:src="@drawable/ic_next" />
+
+                <ImageButton
+                    android:id="@+id/btnStop"
+                    style="@style/CtrlButton"
+                    android:contentDescription="@string/cd_stop"
+                    android:src="@drawable/ic_stop" />
+            </LinearLayout>
+
+            <!-- 재생 목록 / 라이브러리 (재생 버튼 아래) -->
+            <LinearLayout
+                android:id="@+id/listRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:id="@+id/btnQueue"
+                    android:layout_width="0dp"
+                    android:layout_height="60dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_rail_button"
+                    android:contentDescription="@string/cd_queue"
+                    android:gravity="center"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:duplicateParentState="true"
+                        android:src="@drawable/ic_library" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:duplicateParentState="true"
+                        android:maxLines="1"
+                        android:text="@string/now_playing_list"
+                        android:textColor="@color/chip_text"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/btnLibrary"
+                    android:layout_width="0dp"
+                    android:layout_height="60dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="12dp"
+                    android:background="@drawable/bg_rail_button"
+                    android:contentDescription="@string/cd_library"
+                    android:gravity="center"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:duplicateParentState="true"
+                        android:src="@drawable/ic_library_music" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:duplicateParentState="true"
+                        android:maxLines="1"
+                        android:text="@string/library"
+                        android:textColor="@color/chip_text"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+            <!-- 설정 -->
+            <ImageButton
+                android:id="@+id/btnSettings"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:layout_gravity="top|start"
+                android:layout_margin="6dp"
+                android:background="@drawable/bg_round_button"
+                android:contentDescription="@string/settings"
+                android:padding="14dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_settings" />
+
+            <!-- 플레이어 선택: Spotify / YT Music (라이브러리=내 재생목록) / YouTube (전체화면) / USB·SD / 블루투스
+                 + 오른쪽 끝에 앱 바로가기 (가운데 빈 칸이 늘어나 밀어 줌, 좁으면 빈 칸이 0 이 됨) -->
+            <!-- 버튼이 칸보다 많으면 옆으로 밀어서 고름 (0.65). fillViewport 로 넉넉할 땐 빈 칸이 늘어나 바로가기는 오른쪽 끝 -->
+            <HorizontalScrollView
+                android:id="@+id/railScroll"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_gravity="top|start"
+                android:layout_marginStart="58dp"
+                android:layout_marginEnd="10dp"
+                android:layout_marginTop="8dp"
+                android:fillViewport="true"
+                android:overScrollMode="never"
+                android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageButton
+                    android:id="@+id/btnSpotify"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="@drawable/bg_player_icon"
+                    android:contentDescription="@string/spotify"
+                    android:padding="7dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_logo_spotify" />
+
+                <ImageButton
+                    android:id="@+id/btnYt"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_player_icon"
+                    android:contentDescription="@string/yt_video"
+                    android:padding="7dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_logo_youtube" />
+
+                <ImageButton
+                    android:id="@+id/btnLocal"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_player_icon"
+                    android:contentDescription="@string/local_title"
+                    android:padding="7dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_logo_usb" />
+
+                <ImageButton
+                    android:id="@+id/btnBt"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_player_icon"
+                    android:contentDescription="@string/bt_title"
+                    android:padding="7dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_logo_bt" />
+
+                <!-- 차량 라디오 (미디어센터, 0.65) — 차에만 있음 -->
+                <ImageButton
+                    android:id="@+id/btnRadio"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_player_icon"
+                    android:contentDescription="@string/radio_title"
+                    android:padding="7dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_logo_radio"
+                    android:visibility="gone" />
+
+                <!-- YT Music 은 차에서 느려 (웹 재생) 맨 뒤로 (0.48) -->
+                <ImageButton
+                    android:id="@+id/btnYtMusic"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_player_icon"
+                    android:contentDescription="@string/yt_music"
+                    android:padding="7dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_logo_ytmusic" />
+
+                <Space
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1"
+                    android:minWidth="16dp" />
+
+                <!-- 앱 바로가기 (D-Phone · Spotify 등, AppShortcuts) — MainActivity.refreshShortcuts 가 채움, 오른쪽 정렬 -->
+                <LinearLayout
+                    android:id="@+id/appShortcuts"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+            </HorizontalScrollView>
+        </FrameLayout>
+
+    </LinearLayout>
+
+    <!-- 설정 화면 (SettingsPanel 이 항목을 채움) -->
+    <LinearLayout
+        android:id="@+id/settingsOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/bg"
+        android:clickable="true"
+        android:focusable="true"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="20dp">
+
+            <ImageButton
+                android:id="@+id/btnSettingsClose"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@drawable/bg_round_button"
+                android:contentDescription="@string/close"
+                android:padding="16dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_back" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:paddingStart="8dp"
+                android:text="@string/settings"
+                android:textColor="@color/text"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/settingsVersion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_segment"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="6dp"
+                android:textColor="@color/text_dim"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <ScrollView
+            android:id="@+id/settingsScroll"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:fillViewport="true"
+            android:paddingBottom="24dp">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
+                    android:id="@+id/settingsList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:orientation="vertical"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp" />
+            </FrameLayout>
+        </ScrollView>
+    </LinearLayout>
+</FrameLayout>

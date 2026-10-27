@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 플레이어 선택 아이콘 배경: 선택(activated)되면 흰 링 -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#33FFFFFF">
+    <item>
+        <selector>
+            <item android:state_activated="true">
+                <shape android:shape="oval">
+                    <solid android:color="#26FFFFFF" />
+                    <stroke android:width="2dp" android:color="#FFFFFFFF" />
+                </shape>
+            </item>
+            <item>
+                <shape android:shape="oval"><solid android:color="#00000000" /></shape>
+            </item>
+        </selector>
+    </item>
+</ripple>

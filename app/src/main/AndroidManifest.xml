@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- YouTube 목록 · 재생 (0.66 앱 플레이어), 일부 앱이 커버 이미지를 http URI 로 넘겨줌 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 블루투스 음악: 휴대폰이 연결돼 있는지 확인만 (Android 10 차량은 설치 때 자동 허용) -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <!-- 자체 업데이트: 다운로드한 APK 설치 (ADB 설치 실패 시 표준 설치 화면) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- USB / MicroSD 음악·영상 읽기 (Android 13+ 는 미디어별 권한) -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!-- YouTube 재생을 백그라운드에서 유지 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 상단 바 재생 정보 (다른 앱 위에 표시) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- 재생 앱 이름/아이콘 표시용 (개인용 사이드로드 앱) -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        xmlns:tools="http://schemas.android.com/tools"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- 차량 라디오를 화면 없이 켜기 (BYD SDK, 0.65) — 차에서만 의미 있음, ADB 로 D-Player 자신에게만 부여 -->
+    <uses-permission android:name="android.permission.BYDAUTO_MULTIMEDIA_COMMON" />
+    <uses-permission android:name="android.permission.BYDAUTO_MULTIMEDIA_GET" />
+    <uses-permission android:name="android.permission.BYDAUTO_MULTIMEDIA_SET" />
+
+    <queries>
+        <intent>
+            <action android:name="android.media.browse.MediaBrowserService" />
+        </intent>
+        <!-- 재생 중 차량 제어 패널: DolphinControl 의 제어 통로·아이콘 (0.61) -->
+        <package android:name="com.dolphin.control" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:requestLegacyExternalStorage="true"
+        android:resizeableActivity="true"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- USB/SD 영상 전체화면 재생 -->
+        <activity
+            android:name=".local.VideoActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
+
+        <!-- 다른 앱의 MediaSession 에 접근하려면 알림 접근 권한을 가진 리스너가 필요 -->
+        <service
+            android:name=".MediaListenerService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- YouTube · USB 재생 유지용 포그라운드 서비스 -->
+        <service
+            android:name=".youtube.YtService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- 업데이트 APK 를 설치 관리자에 넘기는 provider -->
+        <provider
+            android:name=".update.ApkProvider"
+            android:authorities="${applicationId}.apk"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>
