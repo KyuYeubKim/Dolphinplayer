@@ -56,6 +56,8 @@ class MainActivity : Activity() {
         LOCAL_PLAY_ALL,
         /** YouTube Music: 칸 제목(누를 수 없음) · 검색 · 내 재생목록 · 둘러보기(앨범 등) · 재생목록 바로 재생 · 추천 다시 불러오기 */
         YT_HEADER, YT_SEARCH, YT_MYLIB, YT_BROWSE, YT_LIST, YT_RETRY,
+        /** YouTube 영상: 썸네일 카드 한 줄(cards) · 위쪽 탭(검색 · 맞춤 동영상 · 구독 …) */
+        YT_GRID, YT_TABS,
         /** Spotify(차량 앱 라이브러리): 검색 · 검색어로 바로 재생 */
         SP_SEARCH, SP_PLAY_QUERY, SP_RECENT,
     }
@@ -71,6 +73,8 @@ class MainActivity : Activity() {
         val active: Boolean = false, // 지금 재생 중인 곡
         val playable: Boolean = false, // 폴더(재생목록) 자체를 재생할 수 있음
         val extra: String? = null, // YouTube Music: 곡이 속한 재생목록 id / 둘러보기 params
+        val cards: List<Row> = emptyList(), // YT_GRID: 이 줄에 놓이는 영상 카드
+        val badge: String = "", // 영상 카드: 썸네일 위 길이 (12:34)
     )
 
     /** 라이브러리 폴더 id → 그 폴더 자체를 재생할 수 있는지 (전체 재생에 사용) */
@@ -148,6 +152,10 @@ class MainActivity : Activity() {
     private var loginCancel: (() -> Unit)? = null
     /** YouTube 목록을 영상 쪽(YouTube 버튼)으로 보는 중 — 곡을 누르면 영상 전체화면 (0.66) */
     private var ytVideoMode = false
+    /** YouTube 영상 첫 화면에서 고른 탭 (browse id) */
+    private var ytVideoTab = "FEwhat_to_watch"
+    /** 영상 카드 한 줄의 칸 수 (목록 폭으로 정함, 분할 · 전체화면이 바뀌면 다시 나눔) */
+    private var ytGridCols = 0
     /**
      * YouTube Music 목록에서 들어간 화면들 (비어 있으면 첫 화면 = 검색 · 내 재생목록 · 홈 추천).
      * MYLIB = 내 재생목록 목록, PLAYLIST = 내 재생목록 하나, BROWSE = 앨범·재생목록·믹스·아티스트, SEARCH = 검색 결과(id = 검색어)
@@ -427,6 +435,12 @@ class MainActivity : Activity() {
         listView.adapter = adapter
         listView.setOnItemClickListener { _, _, pos, _ -> onRowClick(rows[pos]) }
         listView.setOnItemLongClickListener { _, _, pos, _ -> onRowLongClick(rows[pos]) }
+        // 목록 폭이 바뀌면(분할 ↔ 전체화면) 영상 카드를 새 칸 수로 다시 나눔
+        listView.addOnLayoutChangeListener { _, l, _, r, _, _, _, _, _ ->
+            if (rows.any { it.kind == Kind.YT_GRID } && gridCols(r - l) != ytGridCols) listView.post {
+                setRows(toGrid(rows.flatMap { if (it.kind == Kind.YT_GRID) it.cards else listOf(it) }), emptyText.text.toString())
+            }
+        }
     }
 
     // ---- 즐겨찾기 바로 재생 (0.64) ----
@@ -1406,18 +1420,53 @@ class MainActivity : Activity() {
         setRows(head + tail, "")
     }
 
-    /** YouTube 영상 첫 화면 (TV 의 맞춤 동영상 · 구독 · 기록 · 나중에 볼 동영상) */
-    private fun showYtVideoRoot() {
-        val recent = recentSearches().firstOrNull()
-        setRows(listOf(
-            Row(Kind.YT_SEARCH, getString(R.string.yt_video_search),
-                recent?.let { getString(R.string.yt_search_recent, it) } ?: getString(R.string.yt_video_search_desc)),
-            Row(Kind.YT_BROWSE, getString(R.string.yt_video_home), getString(R.string.yt_video_home_desc), id = "FEwhat_to_watch"),
-            Row(Kind.YT_BROWSE, getString(R.string.yt_video_subs), getString(R.string.yt_video_subs_desc), id = "FEsubscriptions"),
-            Row(Kind.YT_BROWSE, getString(R.string.yt_video_history), getString(R.string.yt_video_history_desc), id = "FEhistory"),
-            Row(Kind.YT_BROWSE, getString(R.string.yt_video_later), getString(R.string.yt_video_later_desc), id = "VLWL"),
-        ), "")
+    /**
+     * YouTube 영상 첫 화면: 위쪽 탭(검색 · 맞춤 동영상 · 구독 · 기록 · 나중에 볼 동영상) + 고른 탭의 영상 카드.
+     * 전에 받은 내용이 있으면 바로 보여 주고 뒤에서 새로 받는다. failed = 받기 실패 이유 (다시 시도 줄)
+     */
+    private fun showYtVideoRoot(request: Boolean = true, failed: String? = null) {
+        val tabs = Row(Kind.YT_TABS, "", id = ytVideoTab)
+        val page = ytPageCache[YtPageType.BROWSE.name + ":" + ytVideoTab]
+        val shelves = page?.optJSONArray("shelves")
+        val body = when {
+            shelves != null -> toGrid(shelvesToRows(shelves, headers = shelves.length() > 1))
+                .ifEmpty { listOf(Row(Kind.YT_HEADER, getString(R.string.yt_video_none))) }
+            failed != null -> listOf(Row(Kind.YT_RETRY, getString(R.string.yt_load_failed, failed).substringBefore('\n'),
+                getString(R.string.yt_home_retry)))
+            else -> listOf(Row(Kind.YT_HEADER, getString(R.string.loading)))
+        }
+        setRows(listOf(tabs) + body, "")
+        if (request) YtEngine.requestBrowse(this, ytVideoTab)
     }
+
+    private fun selectYtVideoTab(id: String) {
+        if (id == "search") return askYtSearch()
+        ytVideoTab = id
+        showYtVideoRoot()
+        listView.setSelection(0)
+    }
+
+    /** 영상 · 재생목록 · 채널 줄을 썸네일 카드 줄로 묶는다 (칸 제목 · 위로 · 전체 재생 줄은 그대로) */
+    private fun toGrid(items: List<Row>): List<Row> {
+        val w = listView.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val cols = gridCols(w)
+        ytGridCols = cols
+        val out = ArrayList<Row>()
+        val run = ArrayList<Row>()
+        fun flush() {
+            run.chunked(cols).forEach { out.add(Row(Kind.YT_GRID, "", cards = it)) }
+            run.clear()
+        }
+        for (r in items) {
+            if (r.kind == Kind.YT_SONG || r.kind == Kind.YT_LIST || r.kind == Kind.YT_BROWSE) run.add(r)
+            else { flush(); out.add(r) }
+        }
+        flush()
+        return out
+    }
+
+    /** 카드 한 칸이 280dp 안팎이 되게 (분할 화면 2칸 · 전체화면 4칸) */
+    private fun gridCols(widthPx: Int) = (widthPx / dp(280)).coerceIn(1, 5)
 
     /** 앨범·재생목록·믹스·아티스트 화면, 검색 결과 */
     private fun showYtShelves(page: YtPage, msg: org.json.JSONObject) {
@@ -1427,10 +1476,14 @@ class MainActivity : Activity() {
         msg.optString("title").takeIf { it.isNotEmpty() && page.type == YtPageType.BROWSE }?.let { setHeader(it) }
         val body = shelvesToRows(shelves, headers = shelves.length() > 1)
         val songs = body.count { it.kind == Kind.YT_SONG }
+        // 영상은 하나씩 보는 것이라 '전체 재생'(음악 셔플)은 YT Music 쪽에서만
         val head = listOf(Row(Kind.UP, getString(R.string.go_up))) +
-            if (list != null && songs > 1) listOf(Row(Kind.YT_PLAY_ALL, getString(R.string.yt_play_all), page.title, id = list))
+            if (list != null && songs > 1 && !ytVideoMode) listOf(Row(Kind.YT_PLAY_ALL, getString(R.string.yt_play_all), page.title, id = list))
             else emptyList()
-        setRows(head + body, getString(if (page.type == YtPageType.SEARCH) R.string.yt_search_none else R.string.yt_no_songs))
+        if (ytVideoMode && body.isEmpty()) return setRows(head + Row(Kind.YT_HEADER,
+            getString(if (page.type == YtPageType.SEARCH) R.string.yt_search_none else R.string.yt_video_none)), "")
+        setRows(head + if (ytVideoMode) toGrid(body) else body,
+            getString(if (page.type == YtPageType.SEARCH) R.string.yt_search_none else R.string.yt_no_songs))
     }
 
     /** 칸 [{title, items}] → 제목 줄 + 항목 줄 */
@@ -1444,10 +1497,12 @@ class MainActivity : Activity() {
                 val it = items.optJSONObject(j) ?: continue
                 val icon = it.optString("thumb").takeIf { u -> u.isNotEmpty() }?.let(Uri::parse)
                 val title = it.optString("title")
-                val sub = it.optString("subtitle")
+                // 영상 카드는 채널 · 조회수 · 올린 때를 모두, 길이는 썸네일 위에
+                val sub = if (ytVideoMode) it.optString("info").ifEmpty { it.optString("subtitle") } else it.optString("subtitle")
+                val badge = if (ytVideoMode) it.optString("duration") else ""
                 out.add(when (it.optString("kind")) {
                     "song" -> Row(Kind.YT_SONG, title, sub, id = it.optString("videoId"), iconUri = icon,
-                        extra = it.optString("playlistId").ifEmpty { null })
+                        extra = it.optString("playlistId").ifEmpty { null }, badge = badge)
                     "list" -> Row(Kind.YT_LIST, title, sub, id = it.optString("playlistId"), iconUri = icon)
                     else -> Row(Kind.YT_BROWSE, title, sub, id = it.optString("browseId"), iconUri = icon,
                         extra = it.optString("params").ifEmpty { null })
@@ -1642,6 +1697,7 @@ class MainActivity : Activity() {
                 if (ytPageCache.size > 30) ytPageCache.keys.firstOrNull()?.let { ytPageCache.remove(it) }
                 val top = ytTop
                 if (inYtList && top != null && top.type == type && top.id == id) showYtShelves(top, msg)
+                if (inYtList && top == null && ytVideoMode && type == YtPageType.BROWSE && id == ytVideoTab) showYtVideoRoot(request = false)
             }
             "library" -> if (inYtList && ytTop?.type == YtPageType.MYLIB) {
                 val items = msg.optJSONArray("items")
@@ -1681,6 +1737,12 @@ class MainActivity : Activity() {
                 "home" -> {
                     ytHomeFailed = true
                     if (inYtList && ytTop == null && ytHome == null) showYtRoot()
+                }
+                // 영상 첫 화면: 전에 받은 영상이 있으면 그대로 두고, 없으면 탭 아래에 다시 시도 줄
+                "browse" if inYtList && ytVideoMode && ytTop == null -> {
+                    if (ytPageCache.containsKey(YtPageType.BROWSE.name + ":" + ytVideoTab))
+                        toast(getString(R.string.yt_load_failed, msg.optString("message")).substringBefore('\n'))
+                    else showYtVideoRoot(request = false, failed = msg.optString("message"))
                 }
                 "library", "playlist", "queue", "search", "browse" -> if (listOpen && (inYtList || listMode == ListMode.YT_QUEUE)) {
                     if (inYtList && ytTop != null && rows.size > 1) toast(getString(R.string.yt_load_failed, msg.optString("message")))
@@ -2671,7 +2733,7 @@ class MainActivity : Activity() {
             } else {
                 goUp()
             }
-            Kind.YT_HEADER -> Unit
+            Kind.YT_HEADER, Kind.YT_GRID, Kind.YT_TABS -> Unit
             Kind.YT_SEARCH -> askYtSearch()
             Kind.SP_SEARCH -> askSearch(SP_RECENT) { spotifySearch(it) }
             Kind.SP_PLAY_QUERY -> row.id?.let { spotifyPlayFromSearch(it) }
@@ -2782,17 +2844,88 @@ class MainActivity : Activity() {
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
+    /** YouTube 영상 카드 한 줄 (칸 수 = ytGridCols, 마지막 줄의 빈 칸은 자리만) */
+    private fun gridView(convertView: View?, row: Row): View {
+        val cols = maxOf(ytGridCols, 1)
+        val line = (convertView as? LinearLayout)?.takeIf { it.childCount == cols } ?: LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(14), dp(4), dp(14), dp(8))
+            repeat(cols) { addView(layoutInflater.inflate(R.layout.item_video_card, this, false)) }
+        }
+        for (i in 0 until cols) {
+            val card = line.getChildAt(i)
+            val r = row.cards.getOrNull(i)
+            card.visibility = if (r == null) View.INVISIBLE else View.VISIBLE
+            if (r == null) continue
+            card.findViewById<TextView>(R.id.cardTitle).text = r.title
+            card.findViewById<TextView>(R.id.cardSub).apply {
+                text = r.subtitle
+                visibility = if (r.subtitle.isEmpty()) View.GONE else View.VISIBLE
+            }
+            card.findViewById<TextView>(R.id.cardBadge).apply {
+                text = r.badge
+                visibility = if (r.badge.isEmpty()) View.GONE else View.VISIBLE
+            }
+            images.load(card.findViewById(R.id.cardThumb), r.icon, r.iconUri, 0)
+            card.setOnClickListener { onRowClick(r) }
+            card.setOnLongClickListener { onRowLongClick(r) }
+        }
+        return line
+    }
+
+    /** YouTube 영상 첫 화면 위쪽 탭 (row.id = 고른 탭) */
+    private fun tabsView(convertView: View?, row: Row): View {
+        val bar = convertView as? android.widget.HorizontalScrollView ?: android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            clipToPadding = false
+            setPadding(dp(20), dp(10), dp(20), dp(8))
+            val strip = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
+            YT_VIDEO_TABS.forEach { (id, label) ->
+                strip.addView(TextView(this@MainActivity).apply {
+                    tag = id
+                    text = getString(label)
+                    textSize = 17f
+                    gravity = android.view.Gravity.CENTER
+                    setTextColor(getColorStateList(R.color.chip_text))
+                    background = getDrawable(R.drawable.bg_chip)
+                    setPadding(dp(18), 0, dp(18), 0)
+                    if (id == "search") {
+                        getDrawable(R.drawable.ic_search)?.mutate()?.let { d ->
+                            d.setBounds(0, 0, dp(22), dp(22))
+                            d.setTintList(getColorStateList(R.color.chip_text))
+                            setCompoundDrawablesRelative(d, null, null, null)
+                            compoundDrawablePadding = dp(6)
+                        }
+                    }
+                    setOnClickListener { selectYtVideoTab(id) }
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(44)).apply { marginEnd = dp(10) })
+            }
+            addView(strip)
+        }
+        val strip = bar.getChildAt(0) as LinearLayout
+        for (i in 0 until strip.childCount) strip.getChildAt(i).let { it.isActivated = it.tag == row.id }
+        return bar
+    }
+
     private val adapter = object : BaseAdapter() {
         override fun getCount() = rows.size
         override fun getItem(position: Int) = rows[position]
         override fun getItemId(position: Int) = position.toLong()
-        override fun getViewTypeCount() = 2
-        override fun getItemViewType(position: Int) = if (rows[position].kind == Kind.YT_HEADER) 1 else 0
+        override fun getViewTypeCount() = 4
+        override fun getItemViewType(position: Int) = when (rows[position].kind) {
+            Kind.YT_HEADER -> 1
+            Kind.YT_GRID -> 2
+            Kind.YT_TABS -> 3
+            else -> 0
+        }
         override fun areAllItemsEnabled() = false
-        override fun isEnabled(position: Int) = rows[position].kind != Kind.YT_HEADER
+        // 카드 줄 · 탭 줄은 그 안의 칸이 눌림을 받는다
+        override fun isEnabled(position: Int) = rows[position].kind !in setOf(Kind.YT_HEADER, Kind.YT_GRID, Kind.YT_TABS)
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
             val row = rows[position]
+            if (row.kind == Kind.YT_GRID) return gridView(convertView, row)
+            if (row.kind == Kind.YT_TABS) return tabsView(convertView, row)
             if (row.kind == Kind.YT_HEADER) {
                 // YouTube Music 칸 제목 (오늘의 발견 · K-Pop hits …)
                 val h = convertView as? TextView ?: TextView(this@MainActivity).apply {
@@ -2855,6 +2988,14 @@ class MainActivity : Activity() {
         val RADIO_TEXT = Regex("""(?i)\b(FM|AM)\b|MHz|kHz|\b\d{2,3}\.\d\b""")
         /** Spotify 최근 검색어 저장 이름 */
         const val SP_RECENT = "sp_recent_search"
+        /** YouTube 영상 첫 화면 탭: browse id → 이름 (search = 검색 창) */
+        val YT_VIDEO_TABS = listOf(
+            "search" to R.string.yt_video_search,
+            "FEwhat_to_watch" to R.string.yt_video_home,
+            "FEsubscriptions" to R.string.yt_video_subs,
+            "FEhistory" to R.string.yt_video_history,
+            "VLWL" to R.string.yt_video_later,
+        )
         const val REQ_STORAGE = 31
         const val RAIL_DP = 0 // 왼쪽 버튼 줄 없음 (재생 목록 / 라이브러리는 재생 버튼 아래)
         const val SPOTIFY = "com.spotify.music"

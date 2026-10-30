@@ -187,6 +187,8 @@ object YtApi {
         val subtitle = (parts.take(1) + listOfNotNull(duration)).joinToString(" · ")
         return endpoint(t.optJSONObject("onSelectCommand"), t.optString("contentType"), t.optString("contentId"))
             ?.put("title", title)?.put("subtitle", subtitle)?.put("thumb", thumb)
+            // 영상 카드용: 모든 줄(채널 · 조회수 · 올린 때)과 길이를 따로
+            ?.put("info", parts.joinToString(" · "))?.put("duration", duration.orEmpty())
     }
 
     private fun lockup(l: JSONObject): JSONObject? {
@@ -196,9 +198,12 @@ object YtApi {
         val title = text(meta?.opt("title")).trim()
         if (title.isEmpty()) return null
         val rows = meta?.optJSONObject("metadata")?.optJSONObject("contentMetadataViewModel")?.optJSONArray("metadataRows")
-        val firstRow = rows?.optJSONObject(0)?.optJSONArray("metadataParts")?.let { p ->
-            (0 until p.length()).joinToString(" · ") { text(p.optJSONObject(it)?.opt("text")) }
-        }.orEmpty()
+        val rowTexts = (0 until (rows?.length() ?: 0)).map { i ->
+            rows?.optJSONObject(i)?.optJSONArray("metadataParts")?.let { p ->
+                (0 until p.length()).joinToString(" · ") { text(p.optJSONObject(it)?.opt("text")) }
+            }.orEmpty()
+        }.filter { it.isNotEmpty() }
+        val firstRow = rowTexts.firstOrNull().orEmpty()
         val img = l.optJSONObject("contentImage")
         val vm = img?.optJSONObject("thumbnailViewModel")
             ?: img?.optJSONObject("collectionThumbnailViewModel")?.optJSONObject("primaryThumbnail")?.optJSONObject("thumbnailViewModel")
@@ -217,7 +222,7 @@ object YtApi {
         }
         return endpoint(cmd, kind, l.optString("contentId"))?.put("title", title)
             ?.put("subtitle", (listOf(firstRow).filter { it.isNotEmpty() } + listOfNotNull(badge)).joinToString(" · "))
-            ?.put("thumb", thumb)
+            ?.put("thumb", thumb)?.put("info", rowTexts.joinToString(" · "))?.put("duration", badge.orEmpty())
     }
 
     /** 누르면 갈 곳 → 항목 종류. 곡(watch) / 바로 재생할 목록(믹스) / 들어가 볼 화면(재생목록 · 아티스트 · 앨범) */
