@@ -1695,11 +1695,27 @@ class MainActivity : Activity() {
             gravity = android.view.Gravity.CENTER
             letterSpacing = 0.08f
             setPadding(pad, dp(16), pad, dp(8))
+            // 코드가 두 줄로 잘리지 않게 칸 폭에 맞춰 글자를 줄임
+            maxLines = 1
+            setAutoSizeTextTypeUniformWithConfiguration(20, 40, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
         }
-        val box = LinearLayout(this).apply {
+        // QR 코드 (0.69): 휴대폰으로 찍으면 코드가 들어간 google.com/device 화면이 바로 열림
+        val qr = ImageView(this).apply {
+            visibility = View.GONE
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setBackgroundColor(android.graphics.Color.WHITE)
+        }
+        val texts = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(msg)
-            addView(code)
+            addView(code, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(84)))
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(0, 0, pad, 0)
+            addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(qr, LinearLayout.LayoutParams(dp(200), dp(200)).apply { topMargin = dp(12) })
         }
         val dlg = AlertDialog.Builder(this)
             .setTitle(R.string.yt_login)
@@ -1718,6 +1734,9 @@ class MainActivity : Activity() {
         loginCancel = YtEngine.login(this, onCode = { d ->
             msg.text = getString(R.string.yt_login_steps, d.url.removePrefix("https://").removePrefix("www."))
             code.text = d.userCode
+            // google.com/device 는 user_code 를 받아 그 코드의 확인 화면으로 바로 넘겨 준다
+            runCatching { qrBitmap("${d.url}?user_code=${java.net.URLEncoder.encode(d.userCode, "UTF-8")}", dp(184)) }
+                .onSuccess { qr.setImageBitmap(it); qr.visibility = View.VISIBLE }
         }, onDone = { ok, text ->
             loginCancel = null
             if (ok) {
@@ -1727,9 +1746,18 @@ class MainActivity : Activity() {
                 if (listOpen && listMode == ListMode.YOUTUBE) loadList()
             } else {
                 code.text = ""
+                qr.visibility = View.GONE
                 msg.text = getString(R.string.yt_login_failed, text)
             }
         })
+    }
+
+    /** 글자 → QR 코드 그림 (검은 점 · 흰 바탕, 가장자리 여백 1칸) */
+    private fun qrBitmap(text: String, sizePx: Int): Bitmap {
+        val hints = mapOf(com.google.zxing.EncodeHintType.MARGIN to 1)
+        val m = com.google.zxing.qrcode.QRCodeWriter().encode(text, com.google.zxing.BarcodeFormat.QR_CODE, sizePx, sizePx, hints)
+        val px = IntArray(m.width * m.height) { if (m.get(it % m.width, it / m.width)) android.graphics.Color.BLACK else android.graphics.Color.WHITE }
+        return Bitmap.createBitmap(px, m.width, m.height, Bitmap.Config.RGB_565)
     }
 
     private fun onEmptyClick() {

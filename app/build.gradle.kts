@@ -18,8 +18,8 @@ android {
         minSdk = 26
         targetSdk = 34
         // -PtestCode=61 : 에뮬레이터 시험 빌드를 설치된 번호로 (이용 안내 동의 창 · 카페 등록이 다시 뜨지 않게)
-        versionCode = (findProperty("testCode") as String?)?.toInt() ?: 68
-        versionName = "0.68"
+        versionCode = (findProperty("testCode") as String?)?.toInt() ?: 69
+        versionName = "0.69"
     }
 
     // ABI 별 APK (0.65 까지 GeckoView 때문에 나눴던 것). 네이티브 라이브러리는 없어졌지만 업데이트가
@@ -94,6 +94,8 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
     // Spotify 검색: 플랫폼 MediaBrowser 에는 search() 가 없어 AndroidX MediaBrowserCompat 사용 (0.54)
     implementation("androidx.media:media:1.7.0")
+    // YouTube 로그인 창의 QR 코드 (google.com/device?user_code=…) — Apache 2.0 (0.69)
+    implementation("com.google.zxing:core:3.5.3")
     // TV 데이터 해석 시험 (PC 에서 저장해 둔 응답으로, app/src/test)
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")

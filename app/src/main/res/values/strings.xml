@@ -60,7 +60,7 @@
     <string name="yt_not_premium">YouTube Premium 계정이 아닙니다. Premium 계정으로만 쓸 수 있습니다</string>
     <string name="yt_not_premium_tap">YouTube Premium 계정이 아니라서 쓸 수 없습니다.\n(탭하면 다른 계정으로 로그인)</string>
     <string name="yt_login_preparing">로그인 코드를 받는 중…</string>
-    <string name="yt_login_steps">휴대폰에서 %1$s 에 들어가 아래 코드를 넣고 YouTube Premium 계정으로 허용해 주세요.\n허용하면 이 창이 저절로 닫힙니다.</string>
+    <string name="yt_login_steps">휴대폰 카메라로 QR 코드를 찍으면 코드가 들어간 화면이 바로 열립니다. YouTube Premium 계정으로 허용해 주세요.\n(또는 %1$s 에 들어가 아래 코드를 넣기)\n허용하면 이 창이 저절로 닫힙니다.</string>
     <string name="yt_login_failed">로그인하지 못했습니다: %1$s\n닫고 다시 시도해 주세요.</string>
     <string name="yt_play_failed">재생하지 못했습니다: %1$s</string>
     <string name="yt_video_failed">영상을 불러오지 못했습니다 (진단 로그에 이유)</string>
@@ -73,7 +73,7 @@
     <string name="set_yt_premium">로그인됨 · %1$s (Premium)</string>
     <string name="set_yt_login_desc">TV 방식 로그인: 휴대폰으로 코드를 넣습니다 · YouTube Premium 계정만</string>
     <string name="set_license">오픈소스 (GPL v3)</string>
-    <string name="set_license_desc">D-Player 는 GNU GPL v3 오픈소스입니다 · YouTube 재생에 NewPipeExtractor(GPL v3), 재생에 AndroidX Media3(Apache 2.0) 사용\n소스: github.com/KyuYeubKim/Dolphinplayer</string>
+    <string name="set_license_desc">D-Player 는 GNU GPL v3 오픈소스입니다 · YouTube 재생에 NewPipeExtractor(GPL v3), 재생에 AndroidX Media3(Apache 2.0), 로그인 QR 코드에 ZXing(Apache 2.0) 사용\n소스: github.com/KyuYeubKim/Dolphinplayer</string>
     <string name="set_sp_refused_desc">차의 Spotify 앱이 목록을 열어 주지 않습니다 — 재생 · 버튼은 그대로 쓸 수 있습니다</string>
     <string name="yt_no_playlists">재생목록이 없습니다</string>
     <string name="yt_no_songs">곡이 없습니다</string>
