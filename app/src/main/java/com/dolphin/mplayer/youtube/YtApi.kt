@@ -38,8 +38,66 @@ object YtApi {
 
     // ---------- 화면별 요청 ----------
 
-    /** 홈: TV 의 '음악' 화면 (내가 좋아하는 아티스트 · 최근에 재생한 음악 · 믹스 …) */
-    fun home(c: Context): JSONArray = shelves(call(c, "browse", JSONObject().put("browseId", "FEtopics_music")))
+    /**
+     * 홈 (0.70): ① 나를 위한 믹스(내 취향 · 최신음악 · 다시보기 — TV 토큰으로 열면 내 계정 기준)
+     * ② TV 의 '음악' 화면 (내가 좋아하는 아티스트 · 최근에 재생한 음악 · 믹스 …)
+     * ③ YouTube Music 공식 재생목록 칸 (오늘의 핫리스트 · 인기 차트 · 최신 음악 · 분위기 · 상황 · 추억의 음악 …)
+     * YT Music 앱의 홈(FEmusic_home)은 한국에서 로그인해야만 열리고 TV 토큰은 받지 않아(400) 그대로는 못 가져온다.
+     * 대신 같은 공식 재생목록이 일반 YouTube 의 '음악' 채널에 칸별로 있어 그것을 로그인 없이 읽는다. 열고 재생하는 것은 TV 토큰.
+     */
+    fun home(c: Context): JSONArray {
+        val out = JSONArray()
+        out.put(JSONObject().put("title", "나를 위한 믹스").put("items", JSONArray(MIXES.map { (id, title, sub) ->
+            JSONObject().put("kind", "browse").put("browseId", "VL$id").put("title", title).put("subtitle", sub).put("thumb", "")
+        })))
+        // 공식 재생목록 칸(약 0.7초)은 TV 요청과 동시에 받음. 못 받아도 나머지 칸은 그대로 보여 줌
+        var official: JSONArray? = null
+        val web = Thread { official = runCatching { musicChannel() }.getOrNull() }.apply { start() }
+        val tv = shelves(call(c, "browse", JSONObject().put("browseId", "FEtopics_music")))
+        for (i in 0 until tv.length()) out.put(tv.get(i))
+        web.join(15_000)
+        // TV 화면에도 같은 이름의 칸(인기 차트 등)이 있으면 TV 쪽만
+        val have = (0 until out.length()).map { out.getJSONObject(it).optString("title") }.toSet()
+        official?.let { for (i in 0 until it.length()) if (it.getJSONObject(i).optString("title") !in have) out.put(it.get(i)) }
+        return out
+    }
+
+    /** YT Music 이 계정마다 만들어 주는 믹스 (id 는 모두에게 같고, 로그인한 계정 기준으로 채워짐 — 2026-10-31 TV 토큰으로 확인) */
+    private val MIXES = listOf(
+        Triple("RDTMAK5uy_kset8DisdE7LSD4TNjEVvrKRTmG7a56sY", "나만의 믹스", "내 취향의 음악으로 채워진 믹스"),
+        Triple("RDTMAK5uy_lr0LWzGrq6FU9GIxWvFHTRPQD2LHMqlFA", "최신음악 믹스", "좋아할 만한 새 음악"),
+        Triple("RDTMAK5uy_nilrsVWxrKskY0ZUpVZ3zpB0u4LwWTVJ4", "다시보기 믹스", "자주 들은 음악"),
+    )
+
+    /** 일반 YouTube 의 '음악' 채널 (youtube.com/music) — YouTube Music 공식 재생목록이 칸별로 있음. 로그인 없이 (WEB) */
+    private const val MUSIC_CHANNEL = "UC-9-kyTW8ZkZNDHQJ6FgpwQ"
+    private const val WEB_VERSION = "2.20251027.01.00"
+    private const val WEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+
+    private fun musicChannel(): JSONArray {
+        val body = JSONObject().put("browseId", MUSIC_CHANNEL).put("context", JSONObject().put("client", JSONObject()
+            .put("clientName", "WEB").put("clientVersion", WEB_VERSION).put("hl", "ko").put("gl", "KR")))
+        val r = YtAuth.post("${BASE}browse?prettyPrint=false", body,
+            mapOf("User-Agent" to WEB_UA, "Origin" to "https://www.youtube.com", "X-Origin" to "https://www.youtube.com"))
+        if (r.has("error")) throw ApiException(r.optString("error"))
+        val out = JSONArray()
+        for (s in find(r, "richShelfRenderer")) {
+            val title = text(s.opt("title")).trim()
+            // 재생목록만 (공식 재생목록 · 인기 차트). '이번주 베스트' 같은 영상 묶음은 뺌
+            // 공식 재생목록은 STATION + '바로 재생'(watchPlaylistEndpoint)으로 와서, 곡 목록을 열어 보도록 VL 로 바꿈
+            val list = collect(s.opt("contents")).mapNotNull {
+                val pl = it.optString("playlistId")
+                when {
+                    it.optString("kind") == "list" && pl.isNotEmpty() -> it.put("kind", "browse").put("browseId", "VL$pl")
+                    it.optString("kind") == "browse" && it.optString("browseId").startsWith("VL") -> it
+                    else -> null
+                }
+            }
+            if (title.isEmpty() || list.isEmpty()) continue
+            out.put(JSONObject().put("title", title).put("items", JSONArray(list)))
+        }
+        return out
+    }
 
     /** 내 재생목록 (YouTube Music 보관함) → items [{id, title, subtitle, thumb}] */
     fun library(c: Context): JSONArray {
@@ -231,8 +289,10 @@ object YtApi {
         cmd.optJSONObject("watchEndpoint")?.let { w ->
             val vid = w.optString("videoId")
             val list = w.optString("playlistId")
+            // RD… 는 라디오처럼 바로 재생, 단 YT Music 공식 재생목록(RDCLAK) · 믹스(RDTMAK)는 곡 목록이 있어 열어 보게
             if (contentType == "TILE_CONTENT_TYPE_PLAYLIST" && list.isNotEmpty())
-                return if (list.startsWith("RD")) JSONObject().put("kind", "list").put("playlistId", list)
+                return if (list.startsWith("RD") && !list.startsWith("RDCLAK") && !list.startsWith("RDTMAK"))
+                    JSONObject().put("kind", "list").put("playlistId", list)
                 else JSONObject().put("kind", "browse").put("browseId", "VL$list")
             if (vid.isEmpty()) return null
             return JSONObject().put("kind", "song").put("videoId", vid).put("playlistId", list)

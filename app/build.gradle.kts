@@ -18,8 +18,8 @@ android {
         minSdk = 26
         targetSdk = 34
         // -PtestCode=61 : 에뮬레이터 시험 빌드를 설치된 번호로 (이용 안내 동의 창 · 카페 등록이 다시 뜨지 않게)
-        versionCode = (findProperty("testCode") as String?)?.toInt() ?: 69
-        versionName = "0.69"
+        versionCode = (findProperty("testCode") as String?)?.toInt() ?: 70
+        versionName = "0.70"
     }
 
     // ABI 별 APK (0.65 까지 GeckoView 때문에 나눴던 것). 네이티브 라이브러리는 없어졌지만 업데이트가
