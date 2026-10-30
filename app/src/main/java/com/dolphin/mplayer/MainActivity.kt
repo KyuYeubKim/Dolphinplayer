@@ -178,6 +178,7 @@ class MainActivity : Activity() {
     private lateinit var btnLocal: View
     private lateinit var btnBt: View
     private lateinit var btnRadio: View
+    private lateinit var btnFlo: View
     private lateinit var appShortcuts: LinearLayout
     private lateinit var btnYt: View
     private lateinit var sourceIcon: ImageView
@@ -205,8 +206,11 @@ class MainActivity : Activity() {
      * 플레이어 구분 키. 다른 앱은 패키지명, D-Player 안의 재생은 세션 태그로 구분한다:
      * YouTube = 내 패키지명, USB/SD = LOCAL_KEY.
      */
-    private fun key(c: MediaController): String =
-        if (c.packageName == packageName && isLocalSession(c)) LOCAL_KEY else c.packageName
+    private fun key(c: MediaController): String = when {
+        c.packageName == packageName && isLocalSession(c) -> LOCAL_KEY
+        c.packageName == FLO_BYD -> FLO_PKG // 차량 FLO 화면 앱이 세션을 내도 FLO 하나로
+        else -> c.packageName
+    }
 
     /** USB/SD 재생 세션인가. MediaController.getTag() 는 Android 11+ 에만 있어 10(차량)에서는 세션 extras 표시로 확인 */
     private fun isLocalSession(c: MediaController): Boolean =
@@ -406,7 +410,7 @@ class MainActivity : Activity() {
         findViewById<View>(R.id.btnListClose).setOnClickListener { upOrCloseList() }
         findViewById<View>(R.id.btnSettings).setOnClickListener { showSettings() }
         settingsPanel = SettingsPanel(this, settingsActions)
-        settingsPanel.onBetaChanged = { updateBtButton() }
+        settingsPanel.onBetaChanged = { updateRailButtons() }
         btnYtMusic = findViewById(R.id.btnYtMusic)
         btnYt = findViewById(R.id.btnYt)
         btnYtMusic.setOnClickListener { selectYtMusic() }
@@ -418,8 +422,10 @@ class MainActivity : Activity() {
         btnBt.setOnClickListener { selectBluetooth() }
         btnRadio = findViewById(R.id.btnRadio)
         btnRadio.setOnClickListener { selectRadio() }
-        updateRadioButton()
-        updateBtButton()
+        btnFlo = findViewById(R.id.btnFlo)
+        btnFlo.setOnClickListener { selectFlo() }
+        playerIcon(FLO_PKG)?.let { (btnFlo as ImageButton).setImageDrawable(it) }
+        updateRailButtons()
         appShortcuts = findViewById(R.id.appShortcuts)
         refreshShortcuts()
         btnYt.setOnClickListener { openYtVideo() }
@@ -1008,6 +1014,27 @@ class MainActivity : Activity() {
     }
 
     /**
+     * 플레이어로 FLO 선택 (차량 기본 음악 앱, 0.68). 차에는 화면 앱(com.byd.music.kr)과 재생 엔진(skplanet.musicmate)이 따로 있고,
+     * 재생 정보 · 버튼 · 라이브러리는 엔진이 공개한 연결(MediaSession · MediaBrowser)을 그대로 쓴다.
+     * 아직 재생 정보가 없으면 빈 플레이 화면 → 재생 버튼이 FLO 에 재생 신호를 보내 깨운다 (wakeApp).
+     */
+    private fun selectFlo() {
+        if (!isInstalled(FLO_PKG)) return toast(getString(R.string.flo_missing))
+        YtEngine.quiet()
+        pin(FLO_PKG)
+        rememberOtherApps()
+        pickSession(force = true)
+        if (listOpen) setListOpen(true) // 라이브러리를 FLO 것으로
+        updatePlayerChips()
+    }
+
+    /** 플레이어 앱 아이콘 (FLO 는 엔진 앱 대신 화면 앱 아이콘이 있으면 그것) */
+    private fun playerIcon(pkg: String): android.graphics.drawable.Drawable? {
+        val icon = if (pkg == FLO_PKG && isInstalled(FLO_BYD)) FLO_BYD else pkg
+        return runCatching { packageManager.getApplicationIcon(icon) }.getOrNull()
+    }
+
+    /**
      * 설치된 Spotify 패키지. 차량의 Spotify 는 실행 아이콘(런처 항목)이 없을 수 있어
      * 실행 가능 여부가 아니라 설치 여부로 판단한다. (차량용 빌드는 이름이 다를 수 있어 com.spotify.* 도 찾음)
      */
@@ -1158,21 +1185,57 @@ class MainActivity : Activity() {
         c.extras?.keySet()?.let { if (it.isNotEmpty()) append(" · extras=${it.joinToString(",")}") }
     }
 
-    /** 라디오 버튼: 차의 미디어센터에 라디오 화면이 있을 때만 */
-    private fun updateRadioButton() {
-        if (!::btnRadio.isInitialized) return
-        btnRadio.visibility = if (radioComponent() != null || pinned() == MEDIA_PKG) View.VISIBLE else View.GONE
+    /**
+     * 위쪽 음악 소스 버튼 (0.68): 설정에서 고른 것만 보인다. 블루투스 · 라디오 · FLO 는 이 차에 있을 때만
+     * (라디오 = 미디어센터에 라디오 화면, 블루투스 = 블루투스 음악 플레이어, FLO = FLO 엔진 앱).
+     */
+    private fun updateRailButtons() {
+        if (!::btnFlo.isInitialized) return
+        val shown = railSources()
+        mapOf("spotify" to btnSpotify, "flo" to btnFlo, "youtube" to btnYt, "usb" to btnLocal, "bt" to btnBt,
+            "radio" to btnRadio, "ytmusic" to btnYtMusic).forEach { (k, v) ->
+            v.visibility = if (k in shown) View.VISIBLE else View.GONE
+        }
+    }
+
+    /** 이 차에 있는 소스 (설정 창에 보일 것) */
+    private fun availableSources(): List<String> = RAIL_SOURCES.map { it.first }.filter {
+        when (it) {
+            "bt" -> btService() != null || pinned() == BT_PKG
+            "radio" -> radioComponent() != null || pinned() == MEDIA_PKG
+            "flo" -> isInstalled(FLO_PKG)
+            else -> true
+        }
+    }
+
+    private fun hiddenSources(): Set<String> = prefs.getStringSet("rail_hidden", null).orEmpty()
+
+    /** 위쪽에 보일 소스 = 이 차에 있는 것 − 설정에서 끈 것 */
+    private fun railSources(): List<String> = availableSources().filter { it !in hiddenSources() }
+
+    private fun sourceLabel(key: String): String = getString(RAIL_SOURCES.first { it.first == key }.second)
+
+    /** 설정 → 위쪽 음악 버튼: 보일 소스 고르기 (이 차에 없는 소스의 설정은 그대로 둠) */
+    private fun editSources() {
+        val all = availableSources()
+        val checked = BooleanArray(all.size) { all[it] !in hiddenSources() }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.sources_title)
+            .setMultiChoiceItems(all.map { sourceLabel(it) }.toTypedArray(), checked) { _, which, on -> checked[which] = on }
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                if (checked.none { it }) return@setPositiveButton toast(getString(R.string.sources_need_one))
+                val hidden = hiddenSources().filter { it !in all } + all.filterIndexed { i, _ -> !checked[i] }
+                prefs.edit().putStringSet("rail_hidden", hidden.toSet()).apply()
+                updateRailButtons()
+                settingsPanel.refresh()
+            }
+            .setNegativeButton(R.string.close, null)
+            .show()
     }
 
     private fun radioComponent(): ComponentName? {
         val comp = ComponentName(MEDIA_PKG, RADIO_ACTIVITY)
         return comp.takeIf { runCatching { packageManager.getActivityInfo(it, 0) }.isSuccess }
-    }
-
-    /** 블루투스 버튼: 이 기기에 블루투스 음악 플레이어가 있을 때만 보임 (차량은 있음, 0.55 부터 모두에게) */
-    private fun updateBtButton() {
-        if (!::btnBt.isInitialized) return
-        btnBt.visibility = if (btService() != null || pinned() == BT_PKG) View.VISIBLE else View.GONE
     }
 
     private fun btService(): ComponentName? =
@@ -1367,6 +1430,7 @@ class MainActivity : Activity() {
         btnLocal.isActivated = player == LOCAL_KEY
         btnBt.isActivated = player == BT_PKG
         if (::btnRadio.isInitialized) btnRadio.isActivated = player == MEDIA_PKG
+        if (::btnFlo.isInitialized) btnFlo.isActivated = player == FLO_PKG
     }
 
     private fun showYtLibrary() {
@@ -1760,8 +1824,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
-        updateBtButton() // 설정에서 시험판 받기를 켜고 끈 것 반영
-        updateRadioButton()
+        updateRailButtons() // 차에 생기거나 없어진 소스 반영
         // 설치 · 업데이트 뒤 처음: 이용 안내에 동의(카페 닉네임 포함)해야 권한 설정 · 재생을 시작한다 (0.58)
         if (!termsAgreed()) return showTerms(firstRun = true)
         CafeRegister.onAppStart(this) // 닉네임을 이 버전에 아직 안 보냈으면 한 번 보냄 (중복은 안에서 막음)
@@ -2119,6 +2182,8 @@ class MainActivity : Activity() {
         override fun probeSpotify() = probeSpotifyLibrary()
         override fun showTerms() = showTerms(firstRun = false)
         override fun editShortcuts() = this@MainActivity.editShortcuts()
+        override fun editSources() = this@MainActivity.editSources()
+        override fun sourcesSummary() = railSources().joinToString(" · ") { sourceLabel(it) }
         override fun autoCloseSec() = this@MainActivity.autoCloseSec()
         override fun setAutoCloseSec(sec: Int) {
             prefs.edit().putInt("auto_close_sec", sec).apply()
@@ -2328,12 +2393,15 @@ class MainActivity : Activity() {
         sourceLabel.text = c?.let { appLabel(key(it)) }
             ?: pinned()?.let { appLabel(it) } ?: getString(R.string.no_session)
         updatePlayerChips()
-        when {
-            currentPlayer() == LOCAL_KEY -> sourceIcon.setImageResource(R.drawable.ic_logo_usb)
-            currentPlayer() == BT_PKG -> sourceIcon.setImageResource(R.drawable.ic_logo_bt)
-            currentPlayer() == MEDIA_PKG -> sourceIcon.setImageResource(R.drawable.ic_logo_radio)
-            c != null -> runCatching { sourceIcon.setImageDrawable(packageManager.getApplicationIcon(c.packageName)) }
-            else -> sourceIcon.setImageResource(R.drawable.ic_music)
+        when (val p = currentPlayer()) {
+            LOCAL_KEY -> sourceIcon.setImageResource(R.drawable.ic_logo_usb)
+            BT_PKG -> sourceIcon.setImageResource(R.drawable.ic_logo_bt)
+            MEDIA_PKG -> sourceIcon.setImageResource(R.drawable.ic_logo_radio)
+            // D-Player 안의 YouTube 재생: D-Player 아이콘 대신 YT Music / YouTube 로고 (0.68)
+            packageName -> sourceIcon.setImageResource(
+                if (YtEngine.site == YtEngine.Site.VIDEO) R.drawable.ic_logo_youtube else R.drawable.ic_logo_ytmusic)
+            null -> sourceIcon.setImageResource(R.drawable.ic_music)
+            else -> playerIcon(p)?.let { sourceIcon.setImageDrawable(it) } ?: sourceIcon.setImageResource(R.drawable.ic_music)
         }
         if (c == null || m == null || (currentPlayer() == BT_PKG && m.description.title.isNullOrBlank())) {
             title.setText(R.string.nothing_playing)
@@ -2406,8 +2474,8 @@ class MainActivity : Activity() {
         if (listMode == ListMode.YOUTUBE) return showYtLibrary()
         if (listMode == ListMode.YT_QUEUE) return showYtQueue()
         if (listMode == ListMode.LOCAL) return showLocal()
-        val pkg = controller?.packageName
-            ?: (if (isSpotifyPlayer()) spotifyPackage() else null)
+        val pkg = controller?.packageName?.let { if (it == FLO_BYD) FLO_PKG else it }
+            ?: (if (isSpotifyPlayer()) spotifyPackage() else if (pinned() == FLO_PKG) FLO_PKG else null)
             ?: return showMediaApps()
         if (listMode == ListMode.QUEUE) return showQueue()
         // 라이브러리 탐색 (곡을 재생해 대기열이 바뀌어도 탐색 화면은 그대로)
@@ -2999,6 +3067,19 @@ class MainActivity : Activity() {
         const val REQ_STORAGE = 31
         const val RAIL_DP = 0 // 왼쪽 버튼 줄 없음 (재생 목록 / 라이브러리는 재생 버튼 아래)
         const val SPOTIFY = "com.spotify.music"
+        /** FLO 재생 엔진 (세션 · 라이브러리 · 미디어 버튼) · 차량 FLO 화면 앱 */
+        const val FLO_PKG = "skplanet.musicmate"
+        const val FLO_BYD = "com.byd.music.kr"
+        /** 위쪽 음악 소스 버튼 (설정에서 고르는 순서 = 버튼 순서) */
+        val RAIL_SOURCES = listOf(
+            "spotify" to R.string.spotify,
+            "flo" to R.string.flo_title,
+            "youtube" to R.string.yt_video,
+            "usb" to R.string.local_title,
+            "bt" to R.string.bt_title,
+            "radio" to R.string.radio_title,
+            "ytmusic" to R.string.yt_music,
+        )
         /** 차량(BYD)용 Spotify 화면 앱. 이 앱이 한 번 떠야 Spotify 엔진(com.spotify.music)이 로그인 상태로 준비된다 */
         const val SPOTIFY_BYD = "com.vivid.music.byd"
         const val SPOTIFY_BYD_SERVICE = "com.vivid.spotify.service.action.MediaManagerService"

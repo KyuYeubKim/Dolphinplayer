@@ -501,6 +501,18 @@
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_logo_spotify" />
 
+                <!-- FLO (차량 기본 음악 앱, 0.68) — 아이콘은 FLO 앱 것, 차에 있을 때만 -->
+                <ImageButton
+                    android:id="@+id/btnFlo"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_player_icon"
+                    android:contentDescription="@string/flo_title"
+                    android:padding="7dp"
+                    android:scaleType="fitCenter"
+                    android:visibility="gone" />
+
                 <ImageButton
                     android:id="@+id/btnYt"
                     android:layout_width="48dp"

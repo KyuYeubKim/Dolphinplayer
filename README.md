@@ -5,7 +5,8 @@ Spotify API 없이 Android **MediaSession** 으로 지금 재생 중인 음악 �
 읽어서 곡 정보를 보여주고 제어합니다. 로그인·API 키 불필요.
 
 기능: 현재 곡(제목/아티스트/커버/진행바) · 재생 · 일시정지 · 정지 · 이전/다음 곡 · 셔플 · 라이브러리/대기열 · 재생 앱 전환
-· **YouTube Music**(노래 검색 · 홈 · 내 재생목록을 라이브러리에서 재생) · **YouTube**(영상 전체화면) — 차량에 공식 앱이 없어도 Premium 계정으로 사용
+· **YouTube Music**(노래 검색 · 홈 · 내 재생목록을 라이브러리에서 재생) · **YouTube**(썸네일 카드 → 영상 전체화면) — 차량에 공식 앱이 없어도 Premium 계정으로 사용
+· 위쪽 음악 버튼: Spotify · FLO(차량 기본 앱, 0.68) · YouTube · USB/SD · 블루투스 · 라디오 · YT Music — 설정 → '위쪽 음악 버튼'에서 쓰는 것만 보이게
 
 **오픈소스**: D-Player 는 [GNU GPL v3](LICENSE) 입니다. YouTube 재생에 [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor)(GPL v3)를 씁니다.
 

@@ -79,6 +79,12 @@
     <string name="yt_no_songs">곡이 없습니다</string>
     <string name="yt_play_all">전체 재생 (셔플)</string>
     <string name="return_to_dplayer">D-Player 로 돌아가기</string>
+    <string name="set_sources">위쪽 음악 버튼</string>
+    <string name="set_sources_desc">위쪽 줄에 보일 음악 소스 (쓰지 않는 것은 꺼 두기 · 블루투스 · 라디오 · FLO 는 차에 있을 때만)</string>
+    <string name="sources_title">위쪽에 보일 음악 소스</string>
+    <string name="sources_need_one">하나 이상 골라 주세요</string>
+    <string name="flo_title">FLO</string>
+    <string name="flo_missing">이 차에는 FLO 앱이 없습니다</string>
     <string name="set_shortcuts">바로가기 앱</string>
     <string name="set_shortcuts_none">없음</string>
     <string name="set_shortcuts_desc">위쪽 버튼 줄 오른쪽에 둘 앱 (최대 4개) · 버튼을 길게 눌러도 고를 수 있습니다 · 연 앱 위의 초록 ← 버튼을 누르면 D-Player 로 돌아옵니다</string>

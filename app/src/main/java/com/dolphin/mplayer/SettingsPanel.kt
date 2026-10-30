@@ -41,6 +41,9 @@ class SettingsPanel(private val a: Activity, private val actions: Actions) {
         fun showTerms()
         /** 위쪽 버튼 줄의 앱 바로가기 고르기 */
         fun editShortcuts()
+        /** 위쪽 음악 소스 버튼 고르기 (0.68) · 지금 보이는 것 */
+        fun editSources()
+        fun sourcesSummary(): String
         fun autoCloseSec(): Int
         fun setAutoCloseSec(sec: Int)
         /** 재생 중 차량 제어 패널을 켜고 끔 (0.61) */
@@ -166,6 +169,9 @@ class SettingsPanel(private val a: Activity, private val actions: Actions) {
                 }),
             row(logo(R.drawable.ic_logo_ytmusic), s(R.string.set_yt_resume), s(R.string.set_yt_resume_desc),
                 trailing = resumeSwitch) { resumeSwitch.toggle() },
+            row(icon(R.drawable.ic_library_music), s(R.string.set_sources),
+                actions.sourcesSummary() + "\n" + s(R.string.set_sources_desc),
+                trailing = chevron()) { actions.editSources() },
             row(icon(R.drawable.ic_split), s(R.string.set_shortcuts),
                 AppShortcuts.list(a).joinToString(" · ") { AppShortcuts.appLabel(a, it) }.ifEmpty { s(R.string.set_shortcuts_none) } +
                     "\n" + s(R.string.set_shortcuts_desc),
