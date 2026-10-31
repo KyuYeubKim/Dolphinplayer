@@ -202,7 +202,7 @@
     <string name="bt_unavailable">이 차에서는 블루투스 음악을 쓸 수 없어요</string>
     <!-- 재생 중 차량 제어 패널 (0.61, DolphinControl 하단바 기능) -->
     <string name="set_car_panel">재생 중 차량 제어 패널</string>
-    <string name="set_car_panel_desc">음악이 재생 중일 때 앨범 이미지 대신 DolphinControl 하단바에서 고른 기능(열선·창문·에어컨)을 보여 줍니다. 창문·썬쉐이드는 길게 눌러야 실행됩니다.</string>
+    <string name="set_car_panel_desc">음악이 재생 중일 때 앨범 이미지 대신 DolphinControl 하단바에서 고른 기능(열선·창문·에어컨)을 보여 줍니다. 썬쉐이드는 길게 눌러야 실행됩니다. 패널을 좌우로 밀면 앨범 이미지 ↔ 패널.</string>
     <string name="set_car_panel_need">DolphinControl 1.118 이상이 필요합니다 (지금은 앨범 이미지가 그대로 보여요)</string>
     <string name="car_hold">%1$s · 길게 누르면 실행</string>
     <string name="car_failed">%1$s 실패</string>

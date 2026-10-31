@@ -139,6 +139,8 @@ class MainActivity : Activity() {
     // 재생 중 차량 제어 패널 (0.61): 앨범 이미지 자리에 DolphinControl 하단바 기능
     private lateinit var carPanel: CarPanel
     private var carShown = false
+    /** 재생 중 패널을 옆으로 밀어 앨범 이미지를 보는 중 (멈춰서 패널이 닫히면 풀림 → 다음 재생 땐 다시 패널) */
+    private var carUserCover = false
     private var carRetryAt = 0L
     private var lastCoverDp = 260
     // 즐겨찾기 바로 재생 (0.64): 재생 앱 이름 아래 버튼 줄
@@ -389,11 +391,33 @@ class MainActivity : Activity() {
         listPane = findViewById(R.id.listPane)
         playerPane = findViewById(R.id.playerPane)
         playerContent = findViewById(R.id.playerContent)
-        carPanel = CarPanel(this) {
+        carPanel = CarPanel(this, onUnavailable = {
             // DolphinControl 이 없거나 예전 버전 · 고른 기능 없음 → 앨범 이미지로 (30초 뒤 다시 시도)
             carRetryAt = SystemClock.elapsedRealtime() + 30_000
             setCarShown(false)
-        }
+        }, onSwipe = {
+            carUserCover = true
+            updateCarPanel()
+        })
+        // 재생 중 앨범 이미지를 좌우로 밀면 다시 차량 제어 패널로 (0.71)
+        cover.setOnTouchListener(object : View.OnTouchListener {
+            private var downX = 0f
+            private var downY = 0f
+            override fun onTouch(v: View, e: android.view.MotionEvent): Boolean {
+                if (!carUserCover) return false
+                when (e.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY }
+                    android.view.MotionEvent.ACTION_UP -> {
+                        val dx = kotlin.math.abs(e.rawX - downX)
+                        if (dx > dp(60) && dx > kotlin.math.abs(e.rawY - downY) * 1.5f) {
+                            carUserCover = false
+                            updateCarPanel()
+                        }
+                    }
+                }
+                return true
+            }
+        })
         (playerContent as LinearLayout).addView(carPanel.view,
             (playerContent as LinearLayout).indexOfChild(cover) + 1,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(12) })
@@ -653,7 +677,10 @@ class MainActivity : Activity() {
 
     // ---- 재생 중 차량 제어 패널 (0.61) ----
 
-    private val carHide = Runnable { setCarShown(false) }
+    private val carHide = Runnable {
+        setCarShown(false)
+        carUserCover = false
+    }
 
     /** 패널이 보이면 제목·가수(왼쪽)와 짧은 진행바(오른쪽)를 한 줄로 → 패널 자리를 더 넓게 (0.62) */
     private fun compactInfo(on: Boolean) {
@@ -687,8 +714,8 @@ class MainActivity : Activity() {
             SystemClock.elapsedRealtime() >= carRetryAt
         main.removeCallbacks(carHide)
         when {
-            allowed && playing -> setCarShown(true)
-            allowed && carShown -> main.postDelayed(carHide, 1500)
+            allowed && playing -> setCarShown(!carUserCover)
+            allowed && (carShown || carUserCover) -> main.postDelayed(carHide, 1500)
             else -> setCarShown(false)
         }
     }

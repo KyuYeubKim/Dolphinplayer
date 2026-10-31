@@ -28,10 +28,11 @@ import java.util.concurrent.Executors
 /**
  * 재생 중 차량 제어 패널 (0.61) — 음악이 재생 중일 때 앨범 이미지 자리에 DolphinControl 하단바에서 고른 기능을 보여 준다.
  * 차량 제어·상태 읽기는 전부 DolphinControl 이 한다 (content://com.dolphin.control.car, 같은 서명 키 앱만 부를 수 있음).
- * D-Player 는 화면만 그리고, 누르면 DolphinControl 에 실행을 부탁한다. 창문·썬쉐이드는 하단바처럼 길게 눌러야 실행.
+ * D-Player 는 화면만 그리고, 누르면 DolphinControl 에 실행을 부탁한다. 썬쉐이드는 하단바처럼 길게 눌러야 실행
+ * (창문은 0.71 부터 한 번 누르면 실행 — 사용자 요청). 패널을 좌우로 밀면 앨범 이미지로 (onSwipe).
  * 패널이 보이는 동안만 DolphinControl 이 차 상태를 자주 읽도록 watch 를 보낸다 (60초마다 갱신, 끊기면 DC 가 90초 뒤 스스로 해제).
  */
-class CarPanel(private val a: Activity, private val onUnavailable: () -> Unit) {
+class CarPanel(private val a: Activity, private val onUnavailable: () -> Unit, private val onSwipe: () -> Unit) {
 
     companion object {
         const val DC_PKG = "com.dolphin.control"
@@ -58,7 +59,36 @@ class CarPanel(private val a: Activity, private val onUnavailable: () -> Unit) {
     private fun dp(v: Int) = (v * d).toInt()
 
     private val columnsRow = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL }
-    val view: ScrollView = ScrollView(a).apply {
+    val view: ScrollView = object : ScrollView(a) {
+        private var downX = 0f
+        private var downY = 0f
+        private var swiping = false
+        private val slop = android.view.ViewConfiguration.get(a).scaledTouchSlop
+
+        // 옆으로 미는 움직임이 보이면 누르던 타일은 취소(스치며 기능이 실행되지 않게)하고 손을 떼면 앨범 이미지로
+        override fun dispatchTouchEvent(e: android.view.MotionEvent): Boolean {
+            when (e.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; swiping = false }
+                android.view.MotionEvent.ACTION_MOVE -> if (!swiping) {
+                    val dx = kotlin.math.abs(e.rawX - downX)
+                    val dy = kotlin.math.abs(e.rawY - downY)
+                    if (dx > slop * 2 && dx > dy * 1.5f) {
+                        swiping = true
+                        val cancel = android.view.MotionEvent.obtain(e).apply { action = android.view.MotionEvent.ACTION_CANCEL }
+                        super.dispatchTouchEvent(cancel)
+                        cancel.recycle()
+                    }
+                }
+                android.view.MotionEvent.ACTION_UP -> if (swiping) {
+                    swiping = false
+                    if (kotlin.math.abs(e.rawX - downX) > dp(60)) onSwipe()
+                    return true
+                }
+                android.view.MotionEvent.ACTION_CANCEL -> if (swiping) { swiping = false; return true }
+            }
+            return swiping || super.dispatchTouchEvent(e)
+        }
+    }.apply {
         isVerticalScrollBarEnabled = false
         overScrollMode = View.OVER_SCROLL_NEVER
         addView(columnsRow)
@@ -222,7 +252,8 @@ class CarPanel(private val a: Activity, private val onUnavailable: () -> Unit) {
 
         fun update(b: Bundle) {
             name = b.getString("label").orEmpty()
-            longPress = b.getBoolean("longPress")
+            // DolphinControl 은 창문 칸 전체를 길게 누르게 하지만, 패널에서는 썬쉐이드만 (창문은 한 번 누름, 0.71)
+            longPress = b.getBoolean("longPress") && key.startsWith("SUNSHADE")
             val on = b.getBoolean("on")
             val momentary = b.getBoolean("momentary")
             val accent = if (on) b.getInt("color", columnColor) else columnColor
