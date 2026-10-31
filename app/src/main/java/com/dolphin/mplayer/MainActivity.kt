@@ -138,6 +138,9 @@ class MainActivity : Activity() {
     private lateinit var playerContent: View
     // 재생 중 차량 제어 패널 (0.61): 앨범 이미지 자리에 DolphinControl 하단바 기능
     private lateinit var carPanel: CarPanel
+    /** 라디오 저장 채널 (0.73): 라디오가 플레이어이고 차량 제어 패널이 안 보일 때 앨범 이미지 자리에 */
+    private lateinit var radioPresets: RadioPresets
+    private var radioShown = false
     private var carShown = false
     /** 재생 중 패널을 옆으로 밀어 앨범 이미지를 보는 중 (멈춰서 패널이 닫히면 풀림 → 다음 재생 땐 다시 패널) */
     private var carUserCover = false
@@ -403,6 +406,17 @@ class MainActivity : Activity() {
             (playerContent as LinearLayout).indexOfChild(cover) + 1,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(12) })
         carPanel.view.visibility = View.GONE
+        radioPresets = RadioPresets(this, onTune = { tuneRadio(it) }, onSwipe = {
+            // 차량 제어 패널을 밀어 채널 목록을 보는 중이면 다시 패널로
+            if (carUserCover) {
+                carUserCover = false
+                updateCarPanel()
+            }
+        })
+        (playerContent as LinearLayout).addView(radioPresets.view,
+            (playerContent as LinearLayout).indexOfChild(cover) + 1,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(12) })
+        radioPresets.view.visibility = View.GONE
         favRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         (playerContent as LinearLayout).addView(favRow,
             (playerContent as LinearLayout).indexOfChild(findViewById(R.id.btnSource)) + 1,
@@ -620,7 +634,7 @@ class MainActivity : Activity() {
         // 좁은 창(7:3 의 오른쪽 등)에서도 재생 버튼 아이콘이 작아지지 않게 여백을 폭에 맞춤
         // 컨트롤 줄 실제 폭 = 플레이 화면 폭 - 좌우 여백(16dp × 2), 버튼 4개(1) + 재생(1.3)
         // 차량 제어 패널이 보이면 재생 버튼 · 재생 목록/라이브러리를 조금 작게 → 패널 자리 확보 (0.63)
-        val small = carShown
+        val small = carShown || radioShown
         val rowDp = minOf(560, paneDp - 24) - 32
         val btnDp = rowDp / 5.3f
         val ctrlH = if (small) 48 else 64
@@ -654,6 +668,56 @@ class MainActivity : Activity() {
             }
         }
         updateCarPanel()
+    }
+
+    // ---- 라디오 저장 채널 (0.73) ----
+
+    /** 라디오가 플레이어면(차량 제어 패널이 안 보일 때) 앨범 이미지 대신 저장 채널. layout=false 면 배치는 부르는 쪽이 */
+    private fun updateRadioPresets(layout: Boolean = true) {
+        if (!::radioPresets.isInitialized) return
+        val want = currentPlayer() == MEDIA_PKG && !carShown
+        if (want) radioPresets.render(currentRadioStation())
+        if (want == radioShown) return
+        radioShown = want
+        radioPresets.view.visibility = if (want) View.VISIBLE else View.GONE
+        if (layout) {
+            compactInfo(carShown || radioShown)
+            applyLayout()
+        }
+    }
+
+    /** 미디어센터 재생 정보에서 지금 채널 (주파수 + 방송 이름) */
+    private fun currentRadioStation(): RadioPresets.Station? {
+        val c = controller?.takeIf { it.packageName == MEDIA_PKG } ?: return null
+        val m = c.metadata ?: return null
+        val d = m.description
+        val texts = listOfNotNull(
+            d.title, d.subtitle, d.description,
+            m.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE), m.getString(MediaMetadata.METADATA_KEY_ARTIST),
+            m.getString(MediaMetadata.METADATA_KEY_ALBUM), m.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE),
+        ).map { it.toString() }.filter { it.isNotBlank() }.distinct()
+        return RadioPresets.parse(texts)
+    }
+
+    /** 저장 채널 누름: 화면 없이 그 주파수로 (BYD SDK, 권한이 없으면 라디오 버튼 때처럼 ADB 로 한 번 받음) */
+    private fun tuneRadio(s: RadioPresets.Station) {
+        toast(getString(R.string.radio_tuning, s.label))
+        if (pinned() != MEDIA_PKG) {
+            YtEngine.quiet()
+            pin(MEDIA_PKG)
+            rememberOtherApps()
+            updatePlayerChips()
+        }
+        Thread {
+            if (!CarRadio.hasPermission(this) && AdbProvisioner.isReady(this))
+                YtLog.e("라디오 권한 받기: ${if (AdbProvisioner.grantPermissions(this, CarRadio.PERMISSIONS)) "됨" else "안 됨"}")
+            val r = if (CarRadio.hasPermission(this)) CarRadio.tune(this, s.band, s.khz) else null
+            YtLog.e("라디오 채널 바꾸기: ${s.label} ${s.name} (band=${s.band} khz=${s.khz}) → 결과=${r ?: "못 함"}")
+            main.post {
+                if (r == null) toast(getString(R.string.radio_tune_failed))
+                main.postDelayed({ pickSession(force = true) }, 1200)
+            }
+        }.start()
     }
 
     // ---- 재생 중 차량 제어 패널 (0.61) ----
@@ -706,7 +770,8 @@ class MainActivity : Activity() {
         carShown = on
         carPanel.view.visibility = if (on) View.VISIBLE else View.GONE
         if (on) carPanel.show() else carPanel.hide()
-        compactInfo(on)
+        updateRadioPresets(layout = false)
+        compactInfo(on || radioShown)
         applyLayout() // 버튼 크기 · 앨범 이미지 크기 다시 (안에서 부르는 updateCarPanel 은 상태가 같아 그대로)
     }
 
@@ -715,7 +780,7 @@ class MainActivity : Activity() {
      * 실제 높이를 재서 남는 만큼만 앨범 이미지를 키운다. 너무 작아지면 흐린 배경 이미지로 바꾼다.
      */
     private fun fitPlayerHeight(maxCoverDp: Int) {
-        if (carShown) {
+        if (carShown || radioShown) {
             // 차량 제어 패널이 앨범 이미지 자리를 씀 (남는 높이를 모두 차지)
             cover.visibility = View.GONE
             coverBackdrop.visibility = View.GONE
@@ -806,7 +871,7 @@ class MainActivity : Activity() {
                 coverSwipeX = -1f
                 if (playerPane.visibility != View.VISIBLE) return
                 val pane = IntArray(2).also { playerPane.getLocationOnScreen(it) }
-                val top = IntArray(2).also { cover.getLocationOnScreen(it) }[1]
+                val top = IntArray(2).also { (if (radioShown) radioPresets.view else cover).getLocationOnScreen(it) }[1]
                 val title = findViewById<View>(R.id.titleBox)
                 val bottom = IntArray(2).also { title.getLocationOnScreen(it) }[1] + title.height
                 if (ev.rawX >= pane[0] && ev.rawX <= pane[0] + playerPane.width && ev.rawY >= top && ev.rawY <= bottom) {
@@ -2464,6 +2529,7 @@ class MainActivity : Activity() {
         sourceLabel.text = c?.let { appLabel(key(it)) }
             ?: pinned()?.let { appLabel(it) } ?: getString(R.string.no_session)
         updatePlayerChips()
+        updateRadioPresets()
         when (val p = currentPlayer()) {
             LOCAL_KEY -> sourceIcon.setImageResource(R.drawable.ic_logo_usb)
             BT_PKG -> sourceIcon.setImageResource(R.drawable.ic_logo_bt)

@@ -23,12 +23,20 @@ object CarRadio {
     private const val MODE_RADIO = 0
     private const val ACTION_PLAY = 1
     private const val PARAM_WITH_UI = "withui"
+    // 주파수 지정 (0.73): SDK PARAM_RADIO_FREQ="radiofreq"(kHz, FM 89.1 → 89100), 미디어센터 RadioController 가 함께 읽는
+    // "radio_band"(1=FM 2=AM). 범위 · 간격이 지역 설정과 안 맞으면 미디어센터가 거절(frequency_out_of_range 등)
+    private const val PARAM_RADIO_FREQ = "radiofreq"
+    private const val PARAM_RADIO_BAND = "radio_band"
 
     fun hasPermission(c: Context) =
         c.checkSelfPermission("android.permission.BYDAUTO_MULTIMEDIA_SET") == PackageManager.PERMISSION_GRANTED
 
     /** 라디오로 바꿔 재생 (화면 없이). 결과 코드, SDK 가 없거나 실패하면 null */
     fun play(c: Context): Int? = control(c, MODE_RADIO, ACTION_PLAY, mapOf(PARAM_WITH_UI to 0))
+
+    /** 그 주파수로 바꿔 재생 (화면 없이). 결과 코드, 실패하면 null */
+    fun tune(c: Context, band: Int, khz: Int): Int? =
+        control(c, MODE_RADIO, ACTION_PLAY, mapOf(PARAM_WITH_UI to 0, PARAM_RADIO_BAND to band, PARAM_RADIO_FREQ to khz))
 
     /** 진단용: 지금 미디어 종류 (SDK getMediaType, 0=라디오 1=음악 2=영상). 못 읽으면 null */
     fun mediaType(c: Context): Int? = runCatching {

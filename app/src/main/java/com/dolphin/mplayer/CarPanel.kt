@@ -59,40 +59,7 @@ class CarPanel(private val a: Activity, private val onUnavailable: () -> Unit, p
     private fun dp(v: Int) = (v * d).toInt()
 
     private val columnsRow = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL }
-    val view: ScrollView = object : ScrollView(a) {
-        private var downX = 0f
-        private var downY = 0f
-        private var swiping = false
-        private val slop = android.view.ViewConfiguration.get(a).scaledTouchSlop
-
-        // 옆으로 미는 움직임이 보이면 누르던 타일은 취소(스치며 기능이 실행되지 않게)하고 손을 떼면 앨범 이미지로
-        override fun dispatchTouchEvent(e: android.view.MotionEvent): Boolean {
-            when (e.actionMasked) {
-                android.view.MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; swiping = false }
-                android.view.MotionEvent.ACTION_MOVE -> if (!swiping) {
-                    val dx = kotlin.math.abs(e.rawX - downX)
-                    val dy = kotlin.math.abs(e.rawY - downY)
-                    if (dx > slop * 2 && dx > dy * 1.5f) {
-                        swiping = true
-                        val cancel = android.view.MotionEvent.obtain(e).apply { action = android.view.MotionEvent.ACTION_CANCEL }
-                        super.dispatchTouchEvent(cancel)
-                        cancel.recycle()
-                    }
-                }
-                android.view.MotionEvent.ACTION_UP -> if (swiping) {
-                    swiping = false
-                    if (kotlin.math.abs(e.rawX - downX) > dp(60)) onSwipe()
-                    return true
-                }
-                android.view.MotionEvent.ACTION_CANCEL -> if (swiping) { swiping = false; return true }
-            }
-            return swiping || super.dispatchTouchEvent(e)
-        }
-    }.apply {
-        isVerticalScrollBarEnabled = false
-        overScrollMode = View.OVER_SCROLL_NEVER
-        addView(columnsRow)
-    }
+    val view: ScrollView = SwipeScrollView(a, onSwipe).apply { addView(columnsRow) }
 
     private var shown = false
     private var structure = ""
