@@ -399,25 +399,6 @@ class MainActivity : Activity() {
             carUserCover = true
             updateCarPanel()
         })
-        // 재생 중 앨범 이미지를 좌우로 밀면 다시 차량 제어 패널로 (0.71)
-        cover.setOnTouchListener(object : View.OnTouchListener {
-            private var downX = 0f
-            private var downY = 0f
-            override fun onTouch(v: View, e: android.view.MotionEvent): Boolean {
-                if (!carUserCover) return false
-                when (e.actionMasked) {
-                    android.view.MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY }
-                    android.view.MotionEvent.ACTION_UP -> {
-                        val dx = kotlin.math.abs(e.rawX - downX)
-                        if (dx > dp(60) && dx > kotlin.math.abs(e.rawY - downY) * 1.5f) {
-                            carUserCover = false
-                            updateCarPanel()
-                        }
-                    }
-                }
-                return true
-            }
-        })
         (playerContent as LinearLayout).addView(carPanel.view,
             (playerContent as LinearLayout).indexOfChild(cover) + 1,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(12) })
@@ -808,7 +789,42 @@ class MainActivity : Activity() {
 
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
         if (listOpen) resetAutoClose() // 화면을 만지면 다시 셈
+        if (carUserCover) coverSwipe(ev)
         return super.dispatchTouchEvent(ev)
+    }
+
+    private var coverSwipeX = -1f
+    private var coverSwipeY = 0f
+
+    /**
+     * 패널을 밀어 앨범 이미지를 보는 중: 앨범 이미지 줄 전체 폭 ~ 제목까지 어디서든 좌우로 밀면 다시 패널 (0.72).
+     * 0.71 은 앨범 이미지 위에서만 받아, 칸 가운데 작은 이미지 옆 검은 곳에서 밀면 반응하지 않았다. 다른 동작은 그대로 둠 (가로채지 않음).
+     */
+    private fun coverSwipe(ev: android.view.MotionEvent) {
+        when (ev.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                coverSwipeX = -1f
+                if (playerPane.visibility != View.VISIBLE) return
+                val pane = IntArray(2).also { playerPane.getLocationOnScreen(it) }
+                val top = IntArray(2).also { cover.getLocationOnScreen(it) }[1]
+                val title = findViewById<View>(R.id.titleBox)
+                val bottom = IntArray(2).also { title.getLocationOnScreen(it) }[1] + title.height
+                if (ev.rawX >= pane[0] && ev.rawX <= pane[0] + playerPane.width && ev.rawY >= top && ev.rawY <= bottom) {
+                    coverSwipeX = ev.rawX
+                    coverSwipeY = ev.rawY
+                }
+            }
+            android.view.MotionEvent.ACTION_UP -> {
+                if (coverSwipeX < 0) return
+                val dx = kotlin.math.abs(ev.rawX - coverSwipeX)
+                coverSwipeX = -1f
+                if (dx > dp(60) && dx > kotlin.math.abs(ev.rawY - coverSwipeY) * 1.5f) {
+                    carUserCover = false
+                    updateCarPanel()
+                }
+            }
+            android.view.MotionEvent.ACTION_CANCEL -> coverSwipeX = -1f
+        }
     }
 
     /** 리스트 ← / Back: 폴더(재생목록) 안이면 한 단계 위로, 맨 위면 리스트 닫기 */
