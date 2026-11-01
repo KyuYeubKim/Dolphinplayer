@@ -83,7 +83,7 @@ adb shell cmd notification allow_listener com.dolphin.mplayer/.MediaListenerServ
 - **앱 바로가기 (0.39~)**: 위쪽 플레이어 버튼(Spotify · YT Music · YouTube · USB) 오른쪽에 앱 버튼 최대 4개 (기본: 설치돼 있으면 D-Phone · 차량 Spotify).
   설정 → 재생 → 바로가기 앱, 또는 버튼을 길게 눌러 고름. 연 앱 위에 초록 **← 돌아가기** 버튼이 떠서 누르면 D-Player 로 돌아옴
   (끌어서 옮기기 · 위치 기억, `ReturnBubble`). 그 앱에서 뒤로 가기로도 돌아옴.
-- **라디오 저장 채널 (0.73)**: 라디오를 들을 때 앨범 이미지 자리에 D-Player 에 저장한 채널(주파수 + 방송 이름). 누르면 BYD SDK `controlMedia(MODE_RADIO, ACTION_PLAY, radio_band · radiofreq(kHz))` 로 화면 없이 바꿈, '+' 로 지금 채널 저장(미디어센터 재생 정보의 방송 이름을 미리 채움), 길게 눌러 이름 바꾸기 · 지우기. 차 미디어센터의 즐겨찾기는 BYD 시스템 앱만 읽을 수 있어(signature|system) 따로 저장.
+- **라디오 저장 채널 (0.73)**: 라디오를 들을 때 앨범 이미지 자리에 D-Player 에 저장한 채널(주파수 + 방송 이름). 누르면 BYD SDK `controlMedia(MODE_RADIO, ACTION_PLAY, radio_band · radiofreq(kHz))` 로 화면 없이 바꿈, '+' 로 지금 채널 저장(미디어센터 재생 정보의 방송 이름을 미리 채움), 길게 눌러 이름 바꾸기 · 지우기. 차 미디어센터의 즐겨찾기는 BYD 시스템 앱만 읽을 수 있어(signature|system) 따로 저장. 0.74: 차는 'FM 93.9 MHz' 만 주므로 수도권 주파수 표(`RadioInfo.kt`)로 방송사 · 채널명, 로고는 [radio-browser.info](https://www.radio-browser.info) API(FM 주파수 칸은 없음)에서 채널명으로 찾아 한 번 받아 둠.
 - **재생 중 차량 제어 패널 (0.61~)**(설정 → 재생): 재생 중 앨범 이미지 자리에 DolphinControl 하단바에서 고른 기능(열선 · 창문 · 에어컨). 좌우로 밀면 앨범 이미지 ↔ 패널 (0.71, 앨범 이미지 줄 · 제목 줄 어디서든 0.72). 창문은 한 번 누름, 썬쉐이드는 길게 누름.
 - 왼쪽 위 **설정**(톱니바퀴): 전체 화면 설정 — 재생(라이브러리 자동 닫기) · 계정(YouTube) · 권한 · 업데이트 · 정보.
 

@@ -9,6 +9,7 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONArray
@@ -21,6 +22,7 @@ import org.json.JSONObject
  */
 class RadioPresets(
     private val a: Activity,
+    private val images: ImageLoader,
     private val onTune: (Station) -> Unit,
     onSwipe: () -> Unit,
 ) {
@@ -41,8 +43,17 @@ class RadioPresets(
         fun load(c: Context): List<Station> = runCatching {
             val arr = JSONArray(c.getSharedPreferences("player", Context.MODE_PRIVATE).getString(KEY, "[]"))
             (0 until arr.length()).map { arr.getJSONObject(it) }
-                .map { Station(it.getInt("band"), it.getInt("khz"), it.optString("name")) }
+                .map { Station(it.getInt("band"), it.getInt("khz"), cleanName(it.optString("name"))) }
         }.getOrDefault(emptyList())
+
+        /** 주파수 · 'MHz' 만 남은 이름은 이름이 아님 (0.73 은 'FM 93.9 MHz' 에서 'MHz' 를 이름으로 저장했음) */
+        private fun cleanName(n: String) = n.trim().takeIf { NOT_NAME.replace(it, "").isNotBlank() } ?: ""
+
+        /**
+         * 방송 이름 추정 (0.74): 미디어센터 재생 정보에는 'FM 93.9 MHz' 만 있고 방송 이름이 없어서(2026-11-01 차 진단),
+         * 수도권 주파수 기준으로 이름을 짐작해 보여 주고 저장 창에 미리 채운다. 지역이 다르면 틀릴 수 있어 고칠 수 있게.
+         */
+        fun guessName(s: Station): String = RadioInfo.channel(s.band, s.khz)?.label.orEmpty()
 
         fun save(c: Context, list: List<Station>) {
             val arr = JSONArray()
@@ -73,7 +84,7 @@ class RadioPresets(
                 // 방송 이름: 주파수 칸이 아닌 첫 글자 (예: 'KBS 쿨FM'), 없으면 주파수 칸에서 주파수를 뺀 나머지
                 val name = texts.withIndex().filter { it.index != i }.map { it.value.trim() }
                     .firstOrNull { it.isNotEmpty() && NOT_NAME.replace(it, "").isNotBlank() }
-                    ?: t.removeRange(range!!).trim().trim('·', '|', ':', '-', ' ').takeIf { it.length >= 2 }
+                    ?: cleanName(t.removeRange(range!!).trim().trim('·', '|', ':', '-', ' ')).takeIf { it.length >= 2 }
                     ?: ""
                 return s.copy(name = name.take(24))
             }
@@ -81,7 +92,7 @@ class RadioPresets(
         }
 
         /** 주파수 · 밴드 글자만 있는 칸은 이름이 아님 */
-        private val NOT_NAME = Regex("""(?i)\b(FM|AM)\b|[0-9]+(\.[0-9]+)?\s*(MHz|kHz)?|[·|:\-\s]""")
+        private val NOT_NAME = Regex("""(?i)\b(FM|AM|MHz|kHz)\b|[0-9]+(\.[0-9]+)?\s*(MHz|kHz)?|[·|:\-\s]""")
 
         private fun fm(v: Float): Station? {
             val khz = if (v < 200) Math.round(v * 1000) else Math.round(v) // MHz 또는 이미 kHz
@@ -138,26 +149,49 @@ class RadioPresets(
 
     private fun tile(s: Station): View {
         val on = s.same(current)
+        val ch = RadioInfo.channel(s.band, s.khz)
         return LinearLayout(a).apply {
-            orientation = LinearLayout.VERTICAL
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             background = box(on)
             setPadding(dp(6), dp(4), dp(6), dp(4))
-            addView(TextView(a).apply {
-                text = s.freqText
-                textSize = 20f
-                typeface = Typeface.DEFAULT_BOLD
+            // 방송사 로고 (radio-browser, 있을 때만)
+            if (ch != null) {
+                val logo = ImageView(a).apply { scaleType = ImageView.ScaleType.FIT_CENTER; visibility = View.GONE }
+                addView(logo, LinearLayout.LayoutParams(dp(26), dp(26)).apply { marginEnd = dp(6) })
+                fun show(l: RadioInfo.Logo) {
+                    if (l.favicon.isEmpty()) return
+                    logo.visibility = View.VISIBLE
+                    // http 그림은 앱에서 막혀(평문 통신 금지) https 로
+                    images.load(logo, null, android.net.Uri.parse(l.favicon.replaceFirst("http://", "https://")), 0)
+                }
+                RadioInfo.cachedLogo(a, ch.query)?.let { show(it) }
+                    ?: RadioInfo.fetchLogo(a, ch.query) { l -> logo.post { show(l) } }
+            }
+            addView(LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setTextColor(if (on) a.getColor(R.color.accent) else 0xFFEEF3F8.toInt())
-            })
-            addView(TextView(a).apply {
-                text = if (s.name.isEmpty()) s.bandText else "${s.bandText} · ${s.name}"
-                textSize = 11.5f
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                gravity = Gravity.CENTER
-                setTextColor(0xFFDCE4EE.toInt())
-            })
+                addView(TextView(a).apply {
+                    text = s.freqText
+                    textSize = 20f
+                    typeface = Typeface.DEFAULT_BOLD
+                    gravity = Gravity.CENTER
+                    setTextColor(if (on) a.getColor(R.color.accent) else 0xFFEEF3F8.toInt())
+                })
+                addView(TextView(a).apply {
+                    // 사용자가 붙인 이름 → 없으면 방송사 · 채널명 (수도권 표)
+                    text = when {
+                        s.name.isNotEmpty() -> s.name
+                        ch != null -> ch.label
+                        else -> s.bandText
+                    }
+                    textSize = 11.5f
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    gravity = Gravity.CENTER
+                    setTextColor(0xFFDCE4EE.toInt())
+                }, LinearLayout.LayoutParams(-2, -2))
+            }, LinearLayout.LayoutParams(0, -2, 1f))
             contentDescription = "${s.label} ${s.name}"
             setOnClickListener {
                 it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -194,7 +228,7 @@ class RadioPresets(
                 now == null -> toast(a.getString(R.string.radio_no_freq))
                 list.any { s -> s.same(now) } -> toast(a.getString(R.string.radio_saved_already, now.label))
                 list.size >= MAX -> toast(a.getString(R.string.radio_presets_full, MAX))
-                else -> askName(now, a.getString(R.string.radio_save_title, now.label)) { name ->
+                else -> askName(now.copy(name = now.name.ifEmpty { guessName(now) }), a.getString(R.string.radio_save_title, now.label)) { name ->
                     save(a, load(a) + now.copy(name = name))
                     render(current)
                 }
@@ -217,6 +251,7 @@ class RadioPresets(
         }
         AlertDialog.Builder(a)
             .setTitle(title)
+            .setMessage(R.string.radio_name_note)
             .setView(box)
             .setPositiveButton(R.string.radio_save_ok) { _, _ -> done(input.text.toString().trim().take(24)) }
             .setNegativeButton(R.string.close, null)
@@ -227,7 +262,7 @@ class RadioPresets(
         AlertDialog.Builder(a)
             .setTitle(if (s.name.isEmpty()) s.label else "${s.label} · ${s.name}")
             .setItems(arrayOf(a.getString(R.string.radio_rename), a.getString(R.string.radio_delete))) { _, which ->
-                if (which == 0) askName(s, a.getString(R.string.radio_rename_title, s.label)) { name ->
+                if (which == 0) askName(s.copy(name = s.name.ifEmpty { guessName(s) }), a.getString(R.string.radio_rename_title, s.label)) { name ->
                     save(a, load(a).map { if (it.same(s)) it.copy(name = name) else it })
                     render(current)
                 } else {

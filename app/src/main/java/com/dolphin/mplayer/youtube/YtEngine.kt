@@ -61,7 +61,11 @@ object YtEngine : YtService.Source {
     }
 
     /** 재생 목록의 곡 하나 */
-    private data class Track(val videoId: String, val title: String, val artist: String, val thumb: String, val playlistId: String)
+    private data class Track(val videoId: String, val title: String, val artist: String, val thumb: String, val playlistId: String) {
+        /** 같은 곡 판별: 믹스의 '다음 곡' 목록은 같은 곡을 뮤직비디오 · 음원으로 두 번씩 줘서(videoId 다름) 제목 + 가수로 (0.74) */
+        val songKey: String get() = title.lowercase().replace(SPACES, "") + "|" + artist.lowercase().replace(SPACES, "")
+    }
+    private val SPACES = Regex("""\s+""")
 
     private const val ACTION_SHUFFLE = "dplayer.yt.shuffle"
     private const val CACHE_MB = 150L
@@ -330,6 +334,7 @@ object YtEngine : YtService.Source {
         p.prepare()
         p.play()
         publishMetadata()
+        queueLoading = true
         api.execute { loadQueue(videoId, list, shuffle) }
     }
 
@@ -365,16 +370,21 @@ object YtEngine : YtService.Source {
         val raw = if (list.startsWith("RD")) YtApi.next(app, videoId, list)
         else YtApi.playlist(app, list).ifEmpty { YtApi.next(app, videoId, list) }
         return raw.map { Track(it.optString("videoId"), it.optString("title"), artistOf(it.optString("subtitle")), it.optString("thumb"), list) }
-            .filter { it.videoId.length == 11 }.distinctBy { it.videoId }
+            .filter { it.videoId.length == 11 }.distinctBy { it.videoId }.distinctBy { it.songKey }
     }
 
     /** 틀고 있는 곡의 앞뒤에 재생목록을 붙인다 (재생은 끊지 않음) */
     private fun loadQueue(videoId: String, list: String, shuffle: Boolean) {
         val t0 = SystemClock.elapsedRealtime()
         val songs = runCatching { queueFor(videoId, list) }
-            .onFailure { YtLog.e("재생 목록 불러오기 실패 ($list): ${why(it)} — 이 곡만 재생") }.getOrNull() ?: return
+            .onFailure { YtLog.e("재생 목록 불러오기 실패 ($list): ${why(it)} — 이 곡만 재생") }.getOrNull()
+        if (songs == null) {
+            main.post { queueLoading = false }
+            return
+        }
         YtLog.e("재생 목록 ${songs.size}곡 (${SystemClock.elapsedRealtime() - t0}ms)")
         main.post {
+            queueLoading = false
             val p = music ?: return@post
             if (queueList != list || tracks.size != 1 || tracks[0].videoId != videoId) return@post // 그사이 다른 곡을 고름
             val at = songs.indexOfFirst { it.videoId == videoId }
@@ -393,10 +403,12 @@ object YtEngine : YtService.Source {
 
     /** 라디오 · 믹스는 끝이 없음: 남은 곡이 3곡 이하면 마지막 곡으로 다음 목록을 받아 이어 붙임 */
     private var extending = false
+    /** 곡을 고른 직후 재생목록을 받는 중 — 그동안 이어 붙이기를 하지 않음 (0.73 은 먼저 붙여 같은 곡이 두 번 들어감) */
+    private var queueLoading = false
 
     private fun extendIfNeeded() {
         val p = music ?: return
-        if (extending || !queueList.startsWith("RD") || tracks.isEmpty()) return
+        if (extending || queueLoading || !queueList.startsWith("RD") || tracks.isEmpty()) return
         if (tracks.size - p.currentMediaItemIndex > 4) return
         extending = true
         val list = queueList
@@ -407,7 +419,9 @@ object YtEngine : YtService.Source {
             main.post {
                 extending = false
                 if (queueList != list) return@post
+                val have = tracks.map { it.songKey }.toHashSet()
                 val add = more.filter { m -> m.videoId.length == 11 && tracks.none { it.videoId == m.videoId } }
+                    .distinctBy { it.songKey }.filter { it.songKey !in have }
                 if (add.isEmpty()) return@post
                 tracks.addAll(add)
                 music?.addMediaItems(add.map { item(it) })

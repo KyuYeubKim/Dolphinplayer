@@ -46,6 +46,16 @@ class RadioPresetsParseTest {
         assertEquals(93100, p("93.1")!!.khz)
     }
 
+    /** 실제 차 (2026-11-01 진단): TITLE = DISPLAY_TITLE = sendRadioInfo = 'FM 93.9 MHz', ARTIST 비어 있음 */
+    @Test fun realCarTitle() {
+        val s = p("FM 93.9 MHz", "라디오")!!
+        assertEquals(93900, s.khz)
+        assertEquals("라디오", s.name) // MEDIA_NAME 은 currentRadioStation 에서 넘기지 않음
+        val t = p("FM 93.9 MHz")!!
+        assertEquals("", t.name)
+        assertEquals("CBS 음악FM", RadioPresets.guessName(t))
+    }
+
     @Test fun noFrequency() {
         assertNull(p("아이유", "Love wins all"))
         assertNull(p("FM 12.3"))

@@ -227,6 +227,7 @@
     <string name="radio_save_title">%1$s 저장</string>
     <string name="radio_save_ok">저장</string>
     <string name="radio_name_hint">채널 이름 (예: KBS 쿨FM)</string>
+    <string name="radio_name_note">차 라디오는 방송 이름을 알려 주지 않아, 수도권 주파수 기준으로 짐작한 이름을 넣어 둡니다. 지역이 다르면 고쳐 주세요.</string>
     <string name="radio_no_freq">지금 채널의 주파수를 알 수 없습니다 (라디오를 재생한 뒤 다시 눌러 주세요)</string>
     <string name="radio_saved_already">%1$s 은(는) 이미 저장했습니다</string>
     <string name="radio_presets_full">최대 %1$d개까지 저장할 수 있습니다</string>

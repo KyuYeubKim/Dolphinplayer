@@ -1,6 +1,7 @@
 package com.dolphin.mplayer.youtube
 
 import org.json.JSONObject
+import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
@@ -45,5 +46,15 @@ class YtApiParseTest {
             println("다음 곡 칸 항목 수: " + YtApi.shelves(JSONObject().put("contents", JSONObject().put("shelfRenderer", shelf)))
                 .getJSONObject(0).getJSONArray("items").length())
         }
+    }
+
+    /** 믹스의 '다음 곡': 칸마다 기본 곡 + 짝(뮤직비디오 ↔ 음원). 짝을 빼면 칸 수와 같아야 함 (0.74, 중복 재생 목록) */
+    @Test
+    fun nextSkipsCounterpart() {
+        val r = load("next_supermix") ?: return assumeTrue(false)
+        val list = YtApi.find(r, "horizontalListRenderer").first().getJSONArray("items")
+        val shelf = YtApi.find(r, "shelfRenderer").first()
+        val items = YtApi.items(JSONObject().put("contents", shelf.opt("content")))
+        assertEquals(list.length(), items.size)
     }
 }

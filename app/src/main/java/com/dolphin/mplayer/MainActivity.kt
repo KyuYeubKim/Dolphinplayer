@@ -406,7 +406,7 @@ class MainActivity : Activity() {
             (playerContent as LinearLayout).indexOfChild(cover) + 1,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(12) })
         carPanel.view.visibility = View.GONE
-        radioPresets = RadioPresets(this, onTune = { tuneRadio(it) }, onSwipe = {
+        radioPresets = RadioPresets(this, images, onTune = { tuneRadio(it) }, onSwipe = {
             // 차량 제어 패널을 밀어 채널 목록을 보는 중이면 다시 패널로
             if (carUserCover) {
                 carUserCover = false
@@ -634,7 +634,8 @@ class MainActivity : Activity() {
         // 좁은 창(7:3 의 오른쪽 등)에서도 재생 버튼 아이콘이 작아지지 않게 여백을 폭에 맞춤
         // 컨트롤 줄 실제 폭 = 플레이 화면 폭 - 좌우 여백(16dp × 2), 버튼 4개(1) + 재생(1.3)
         // 차량 제어 패널이 보이면 재생 버튼 · 재생 목록/라이브러리를 조금 작게 → 패널 자리 확보 (0.63)
-        val small = carShown || radioShown
+        // 차량 제어 패널을 켜 두면 앨범 이미지일 때도 같은 크기 (밀어서 바꿀 때 버튼이 커졌다 작아졌다 하지 않게, 0.74)
+        val small = carShown || radioShown || CarPanel.isEnabled(this)
         val rowDp = minOf(560, paneDp - 24) - 32
         val btnDp = rowDp / 5.3f
         val ctrlH = if (small) 48 else 64
@@ -2236,6 +2237,7 @@ class MainActivity : Activity() {
         override fun carPanelChanged() {
             carRetryAt = 0L
             updateCarPanel()
+            applyLayout() // 재생 버튼 크기 (패널을 켜면 앨범 이미지일 때도 작게)
         }
         override fun checkUpdate() = AppUpdater.checkManual(this@MainActivity)
         override fun regrant() {
@@ -2557,6 +2559,11 @@ class MainActivity : Activity() {
         }
         val who = desc.subtitle?.toString() ?: m.getString(MediaMetadata.METADATA_KEY_ARTIST)
         artist.text = who.orEmpty()
+        // 라디오: 차가 방송 이름을 주지 않아 저장한 이름 → 수도권 주파수 표의 방송사 · 채널명 (0.74)
+        if (who.isNullOrBlank() && currentPlayer() == MEDIA_PKG) currentRadioStation()?.let { st ->
+            artist.text = RadioPresets.load(this).firstOrNull { it.same(st) }?.name?.takeIf { it.isNotEmpty() }
+                ?: RadioPresets.guessName(st)
+        }
         val art = m.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: m.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: desc.iconBitmap

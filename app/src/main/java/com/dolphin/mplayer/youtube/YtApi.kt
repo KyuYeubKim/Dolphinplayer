@@ -212,8 +212,10 @@ object YtApi {
                         }
                         return // 칸 안의 메뉴(긴 누름) 등은 보지 않음
                     }
-                    // 머리글 · 메뉴 · 오버레이 안의 버튼은 항목이 아님
-                    for (k in x.keys()) if (k != "headerRenderer" && k != "menu" && k != "menuRenderer" && !k.startsWith("overlay")) walk(x.opt(k))
+                    // 머리글 · 메뉴 · 오버레이 안의 버튼은 항목이 아님.
+                    // counterpart = 같은 곡의 짝(뮤직비디오 ↔ 음원, playlistPanelVideoWrapperRenderer) — 믹스 · 라디오 목록에 같은 곡이 두 번 들어가던 원인 (0.74)
+                    for (k in x.keys()) if (k != "headerRenderer" && k != "menu" && k != "menuRenderer" && k != "counterpart" &&
+                        !k.startsWith("overlay")) walk(x.opt(k))
                 }
                 is JSONArray -> for (i in 0 until x.length()) walk(x.opt(i))
             }
