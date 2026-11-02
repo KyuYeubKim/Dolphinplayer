@@ -559,6 +559,18 @@
                     android:src="@drawable/ic_logo_radio"
                     android:visibility="gone" />
 
+                <!-- 인터넷 라디오 (0.78) — 방송사 공개 스트림, 지역이 바뀌어도 이어짐 -->
+                <ImageButton
+                    android:id="@+id/btnIRadio"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_player_icon"
+                    android:contentDescription="@string/iradio_title"
+                    android:padding="7dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_logo_iradio" />
+
                 <!-- YT Music 은 차에서 느려 (웹 재생) 맨 뒤로 (0.48) -->
                 <ImageButton
                     android:id="@+id/btnYtMusic"

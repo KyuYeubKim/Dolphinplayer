@@ -6,7 +6,7 @@ Spotify API 없이 Android **MediaSession** 으로 지금 재생 중인 음악 �
 
 기능: 현재 곡(제목/아티스트/커버/진행바) · 재생 · 일시정지 · 정지 · 이전/다음 곡 · 셔플 · 라이브러리/대기열 · 재생 앱 전환
 · **YouTube Music**(노래 검색 · 홈 · 내 재생목록을 라이브러리에서 재생) · **YouTube**(썸네일 카드 → 영상 전체화면) — 차량에 공식 앱이 없어도 Premium 계정으로 사용
-· 위쪽 음악 버튼: Spotify · FLO(차량 기본 앱, 0.68) · YouTube · USB/SD · 블루투스 · 라디오 · YT Music — 설정 → '위쪽 음악 버튼'에서 쓰는 것만 보이게
+· 위쪽 음악 버튼: Spotify · FLO(차량 기본 앱, 0.68) · YouTube · USB/SD · 블루투스 · 라디오 · 인터넷 라디오(0.78) · YT Music — 설정 → '위쪽 음악 버튼'(또는 버튼을 길게 누름)에서 보이기 · 순서(▲▼, 0.78)
 
 **오픈소스**: D-Player 는 [GNU GPL v3](LICENSE) 입니다. YouTube 재생에 [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor)(GPL v3)를 씁니다.
 
@@ -84,6 +84,7 @@ adb shell cmd notification allow_listener com.dolphin.mplayer/.MediaListenerServ
   설정 → 재생 → 바로가기 앱, 또는 버튼을 길게 눌러 고름. 연 앱 위에 초록 **← 돌아가기** 버튼이 떠서 누르면 D-Player 로 돌아옴
   (끌어서 옮기기 · 위치 기억, `ReturnBubble`). 그 앱에서 뒤로 가기로도 돌아옴.
 - **라디오 저장 채널 (0.73)**: 라디오를 들을 때 앨범 이미지 자리에 D-Player 에 저장한 채널(주파수 + 방송 이름). 누르면 BYD SDK `controlMedia(MODE_RADIO, ACTION_PLAY, radio_band · radiofreq(kHz))` 로 화면 없이 바꿈, '+' 로 지금 채널 저장(미디어센터 재생 정보의 방송 이름을 미리 채움), 길게 눌러 이름 바꾸기 · 지우기. 차 미디어센터의 즐겨찾기는 BYD 시스템 앱만 읽을 수 있어(signature|system) 따로 저장. 0.74: 차는 'FM 93.9 MHz' 만 주므로 수도권 주파수 표(`RadioInfo.kt`)로 방송사 · 채널명, 로고는 [radio-browser.info](https://www.radio-browser.info) API(FM 주파수 칸은 없음)에서 채널명으로 찾아 한 번 받아 둠. 0.76: 펌웨어에서 BYDAUTO_MULTIMEDIA_SET 은 signature, 미디어센터 MediaService 는 STARTSERVER(signatureOrSystem) 권한이라 일반 앱은 주파수를 지정할 수 없음(우회하지 않음) → 저장 채널을 누르면 미디어센터 재생 세션의 다음/이전(skipToNext/Previous)을 그 주파수가 나올 때까지 누름(최대 40번, 한 바퀴 돌면 멈춤). 권한이 있는 펌웨어면 SDK 로 바로. 미디어센터의 재생 세션은 재생 · 일시정지 · 다음 · 이전만 받고(playFromMediaId · 사용자 명령 없음), 화면 없이 부를 수 있는 통로(MediaService)는 시스템 전용이라 주파수를 바로 고르는 정식 방법은 없음.
+- **인터넷 라디오 (0.78)**: 방송사가 자기 웹 플레이어에 쓰는 공개 HLS 스트림을 앱 안 ExoPlayer 로 재생(`iradio/`). 차 라디오(FM)는 그대로 두고 따로 있는 플레이어. KBS(쿨FM · 해피FM · 1라디오 · 클래식FM · 3라디오 · 한민족방송, 콩 채널 API — 서명된 주소라 재생할 때마다 새로 받음) · MBC(FM4U · 표준FM · 올댓뮤직, mini 주소 API) · SBS(파워FM · 러브FM, 고릴라 주소 API 토큰) · CBS(음악 · 표준) · EBS · YTN · TBS · 국악방송 · 극동방송(고정 주소), 18곳. 방송 정보: KBS 편성표 API(진행자 · 제작진 · 프로그램 소개 · 사진, 30분씩 나뉜 같은 프로그램은 합침) · MBC 오늘 편성표(sType FM=표준FM · FM4U · CHM=올댓뮤직) · SBS 지금 프로그램, 시각은 한국 시간 기준. 앨범 이미지 자리에 지금 방송 카드(사진 · 프로그램 · 진행자 · 시간 · 소개 · 제작 · 다음 프로그램 · 스트림 형식 · 스트림의 지금 곡) + 채널 버튼, 라이브러리 = 채널 목록(로고 · 지금 프로그램), 재생 목록 = 오늘 편성표, 진행바 = 지금 프로그램이 지난 시간, 다음/이전 = 옆 채널. 끊기면(터널 · 주소 만료) 주소를 다시 받아 2초 → 30초 간격으로 다시 연결, 생방송 끝에서 20초 뒤를 재생해 그만큼 미리 받아 둠. 로고는 KBS 채널 API · radio-browser.
 - **재생 중 차량 제어 패널 (0.61~)**(설정 → 재생): 재생 중 앨범 이미지 자리에 DolphinControl 하단바에서 고른 기능(열선 · 창문 · 에어컨). 좌우로 밀면 앨범 이미지 ↔ 패널 (0.71, 앨범 이미지 줄 · 제목 줄 어디서든 0.72). 창문은 한 번 누름, 썬쉐이드는 길게 누름.
 - 왼쪽 위 **설정**(톱니바퀴): 전체 화면 설정 — 재생(라이브러리 자동 닫기) · 계정(YouTube) · 권한 · 업데이트 · 정보.
 

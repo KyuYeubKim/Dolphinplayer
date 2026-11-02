@@ -40,6 +40,9 @@ import com.dolphin.mplayer.adb.AdbClient
 import com.dolphin.mplayer.adb.AdbDiag
 import com.dolphin.mplayer.adb.AdbProvisioner
 import com.dolphin.mplayer.update.AppUpdater
+import com.dolphin.mplayer.iradio.IRadioApi
+import com.dolphin.mplayer.iradio.IRadioEngine
+import com.dolphin.mplayer.iradio.IRadioView
 import com.dolphin.mplayer.local.LocalEngine
 import com.dolphin.mplayer.local.VideoActivity
 import com.dolphin.mplayer.youtube.YtEngine
@@ -60,6 +63,8 @@ class MainActivity : Activity() {
         YT_GRID, YT_TABS,
         /** Spotify(차량 앱 라이브러리): 검색 · 검색어로 바로 재생 */
         SP_SEARCH, SP_PLAY_QUERY, SP_RECENT,
+        /** 인터넷 라디오: 채널 · 오늘 편성표의 프로그램 (0.78) */
+        IR_STATION, IR_PROGRAM,
     }
 
     private data class Row(
@@ -81,11 +86,11 @@ class MainActivity : Activity() {
     private val folderPlayable = HashMap<String, Boolean>()
 
     /** 리스트 내용: 라이브러리 / 재생 목록(대기열) × 일반 앱 / YouTube Music */
-    private enum class ListMode { LIBRARY, QUEUE, YOUTUBE, YT_QUEUE, LOCAL }
+    private enum class ListMode { LIBRARY, QUEUE, YOUTUBE, YT_QUEUE, LOCAL, IRADIO, IR_SCHED }
 
     /** 라이브러리 계열인가 (아니면 재생 목록 계열) */
     private fun isLibraryMode() =
-        listMode == ListMode.LIBRARY || listMode == ListMode.YOUTUBE || listMode == ListMode.LOCAL
+        listMode == ListMode.LIBRARY || listMode == ListMode.YOUTUBE || listMode == ListMode.LOCAL || listMode == ListMode.IRADIO
 
 
     /** USB/SD 라이브러리에서 보고 있는 폴더 (null = 저장소 목록) */
@@ -186,6 +191,9 @@ class MainActivity : Activity() {
     private lateinit var btnLocal: View
     private lateinit var btnBt: View
     private lateinit var btnRadio: View
+    private lateinit var btnIRadio: View
+    /** 인터넷 라디오가 플레이어일 때 앨범 이미지 자리: 방송 정보 + 채널 (0.78) */
+    private lateinit var iradioView: IRadioView
     private lateinit var btnFlo: View
     private lateinit var appShortcuts: LinearLayout
     private lateinit var btnYt: View
@@ -216,6 +224,7 @@ class MainActivity : Activity() {
      */
     private fun key(c: MediaController): String = when {
         c.packageName == packageName && isLocalSession(c) -> LOCAL_KEY
+        c.packageName == packageName && isIRadioSession(c) -> IRADIO_KEY
         c.packageName == FLO_BYD -> FLO_PKG // 차량 FLO 화면 앱이 세션을 내도 FLO 하나로
         else -> c.packageName
     }
@@ -224,6 +233,11 @@ class MainActivity : Activity() {
     private fun isLocalSession(c: MediaController): Boolean =
         if (Build.VERSION.SDK_INT >= 30) c.tag == LocalEngine.TAG
         else runCatching { c.extras?.getBoolean(LocalEngine.EXTRA_LOCAL) }.getOrNull() == true
+
+    /** 인터넷 라디오 세션인가 (USB 와 같은 방식) */
+    private fun isIRadioSession(c: MediaController): Boolean =
+        if (Build.VERSION.SDK_INT >= 30) c.tag == IRadioEngine.TAG
+        else runCatching { c.extras?.getBoolean(IRadioEngine.EXTRA_IRADIO) }.getOrNull() == true
 
     private fun rememberOtherApps() {
         otherPlaying.clear()
@@ -420,6 +434,18 @@ class MainActivity : Activity() {
             (playerContent as LinearLayout).indexOfChild(cover) + 1,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(12) })
         radioPresets.view.visibility = View.GONE
+        IRadioEngine.init(this)
+        iradioView = IRadioView(this, images, onPick = { playIRadio(it) }, onInfo = { showIRadioInfo(it) }, onSwipe = {
+            if (carUserCover) {
+                carUserCover = false
+                updateCarPanel()
+            }
+        })
+        (playerContent as LinearLayout).addView(iradioView.view,
+            (playerContent as LinearLayout).indexOfChild(cover) + 1,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(12) })
+        iradioView.view.visibility = View.GONE
+        IRadioEngine.listener = { onIRadioChanged() }
         favRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         (playerContent as LinearLayout).addView(favRow,
             (playerContent as LinearLayout).indexOfChild(findViewById(R.id.btnSource)) + 1,
@@ -450,8 +476,14 @@ class MainActivity : Activity() {
         btnBt.setOnClickListener { selectBluetooth() }
         btnRadio = findViewById(R.id.btnRadio)
         btnRadio.setOnClickListener { selectRadio() }
+        btnIRadio = findViewById(R.id.btnIRadio)
+        btnIRadio.setOnClickListener { selectIRadio() }
         btnFlo = findViewById(R.id.btnFlo)
         btnFlo.setOnClickListener { selectFlo() }
+        // 위쪽 음악 버튼을 길게 누르면 보이기 · 순서 바꾸기 (0.78)
+        listOf(btnSpotify, btnFlo, btnYt, btnLocal, btnBt, btnRadio, btnIRadio, btnYtMusic).forEach {
+            it.setOnLongClickListener { editSources(); true }
+        }
         playerIcon(FLO_PKG)?.let { (btnFlo as ImageButton).setImageDrawable(it) }
         updateRailButtons()
         appShortcuts = findViewById(R.id.appShortcuts)
@@ -493,6 +525,7 @@ class MainActivity : Activity() {
 
     /** 라이브러리 줄을 길게 누르면 즐겨찾기에 넣기 / 빼기 */
     private fun onRowLongClick(row: Row): Boolean {
+        if (row.kind == Kind.IR_STATION) return IRadioApi.station(row.id)?.let { showIRadioInfo(it); true } ?: false
         val f = favFor(row) ?: return false
         resetAutoClose()
         if (Favorites.contains(this, f.src, f.id)) {
@@ -705,11 +738,16 @@ class MainActivity : Activity() {
     /** 라디오가 플레이어면(차량 제어 패널이 안 보일 때) 앨범 이미지 대신 저장 채널. layout=false 면 배치는 부르는 쪽이 */
     private fun updateRadioPresets(layout: Boolean = true) {
         if (!::radioPresets.isInitialized) return
-        val want = currentPlayer() == MEDIA_PKG && !carShown
-        if (want) radioPresets.render(currentRadioStation())
+        // 차 라디오 = 저장 채널, 인터넷 라디오 = 방송 정보 + 채널 (0.78). 배치는 둘 다 radioShown 으로
+        val wantCar = currentPlayer() == MEDIA_PKG && !carShown
+        val wantNet = currentPlayer() == IRADIO_KEY && !carShown
+        if (wantCar) radioPresets.render(currentRadioStation())
+        if (wantNet) iradioView.render()
+        radioPresets.view.visibility = if (wantCar) View.VISIBLE else View.GONE
+        iradioView.view.visibility = if (wantNet) View.VISIBLE else View.GONE
+        val want = wantCar || wantNet
         if (want == radioShown) return
         radioShown = want
-        radioPresets.view.visibility = if (want) View.VISIBLE else View.GONE
         if (layout) {
             compactInfo(carShown || radioShown)
             applyLayout()
@@ -952,7 +990,7 @@ class MainActivity : Activity() {
                 coverSwipeX = -1f
                 if (playerPane.visibility != View.VISIBLE) return
                 val pane = IntArray(2).also { playerPane.getLocationOnScreen(it) }
-                val top = IntArray(2).also { (if (radioShown) radioPresets.view else cover).getLocationOnScreen(it) }[1]
+                val top = IntArray(2).also { (if (iradioView.view.visibility == View.VISIBLE) iradioView.view else if (radioShown) radioPresets.view else cover).getLocationOnScreen(it) }[1]
                 val title = findViewById<View>(R.id.titleBox)
                 val bottom = IntArray(2).also { title.getLocationOnScreen(it) }[1] + title.height
                 if (ev.rawX >= pane[0] && ev.rawX <= pane[0] + playerPane.width && ev.rawY >= top && ev.rawY <= bottom) {
@@ -1293,6 +1331,11 @@ class MainActivity : Activity() {
             if (c.packageName == MEDIA_PKG) appendLine("  미디어센터: ${describeSession(c)} · 라디오로 보임=${looksLikeRadio(c)}")
         }
         if (radioComponent() != null) appendLine(CarRadio.describe(this@MainActivity))
+        IRadioEngine.station?.let { st ->
+            val now = IRadioApi.cached(st)?.now
+            appendLine("인터넷 라디오: ${st.name} · 재생=${IRadioEngine.playing} · 형식=${IRadioEngine.streamFormat ?: "-"}" +
+                " · 지금=${now?.let { "${it.title} ${it.timeText}" } ?: "-"} · 끊김=${IRadioEngine.trouble ?: "없음"}")
+        }
         appendLine(StatusTicker.diag(this@MainActivity))
         append("블루투스: 플레이어 서비스=${btService()?.className ?: "없음(꺼짐)"}, 휴대폰 연결=${btPhoneConnected()}, " +
             "연결한 컨트롤러=${btCtl != null} 상태=${btCtl?.playbackState?.state} 곡='${btCtl?.metadata?.description?.title ?: ""}'")
@@ -1380,12 +1423,40 @@ class MainActivity : Activity() {
      * (라디오 = 미디어센터에 라디오 화면, 블루투스 = 블루투스 음악 플레이어, FLO = FLO 엔진 앱).
      */
     private fun updateRailButtons() {
-        if (!::btnFlo.isInitialized) return
+        if (!::btnIRadio.isInitialized) return
         val shown = railSources()
-        mapOf("spotify" to btnSpotify, "flo" to btnFlo, "youtube" to btnYt, "usb" to btnLocal, "bt" to btnBt,
-            "radio" to btnRadio, "ytmusic" to btnYtMusic).forEach { (k, v) ->
+        val buttons = mapOf("spotify" to btnSpotify, "flo" to btnFlo, "youtube" to btnYt, "usb" to btnLocal, "bt" to btnBt,
+            "radio" to btnRadio, "iradio" to btnIRadio, "ytmusic" to btnYtMusic)
+        // 사용자가 정한 순서대로 줄 맨 앞부터 다시 놓음 (0.78). 첫 번째로 보이는 버튼은 왼쪽 여백 없이
+        val rail = btnSpotify.parent as LinearLayout
+        var first = true
+        railOrder().forEachIndexed { i, k ->
+            val v = buttons[k] ?: return@forEachIndexed
             v.visibility = if (k in shown) View.VISIBLE else View.GONE
+            if (rail.indexOfChild(v) != i) {
+                rail.removeView(v)
+                rail.addView(v, i)
+            }
+            (v.layoutParams as LinearLayout.LayoutParams).marginStart = if (first && k in shown) 0 else dp(4)
+            if (k in shown) first = false
         }
+        rail.requestLayout()
+    }
+
+    /** 위쪽 음악 버튼 순서: 저장한 순서 + 새로 생긴 소스(기본 순서 자리) */
+    private fun railOrder(): List<String> {
+        val all = RAIL_SOURCES.map { it.first }
+        val saved = prefs.getString("rail_order", null)?.split(',')?.filter { it in all }.orEmpty()
+        if (saved.isEmpty()) return all
+        val out = saved.toMutableList()
+        all.forEachIndexed { i, k ->
+            if (k !in out) {
+                // 기본 순서에서 바로 앞에 있던 소스 뒤에 끼워 넣음
+                val before = all.take(i).lastOrNull { it in out }
+                out.add(if (before == null) 0 else out.indexOf(before) + 1, k)
+            }
+        }
+        return out
     }
 
     /** 이 차에 있는 소스 (설정 창에 보일 것) */
@@ -1401,26 +1472,91 @@ class MainActivity : Activity() {
     private fun hiddenSources(): Set<String> = prefs.getStringSet("rail_hidden", null).orEmpty()
 
     /** 위쪽에 보일 소스 = 이 차에 있는 것 − 설정에서 끈 것 */
-    private fun railSources(): List<String> = availableSources().filter { it !in hiddenSources() }
+    private fun railSources(): List<String> = railOrder().filter { it in availableSources() && it !in hiddenSources() }
 
     private fun sourceLabel(key: String): String = getString(RAIL_SOURCES.first { it.first == key }.second)
 
     /** 설정 → 위쪽 음악 버튼: 보일 소스 고르기 (이 차에 없는 소스의 설정은 그대로 둠) */
     private fun editSources() {
-        val all = availableSources()
-        val checked = BooleanArray(all.size) { all[it] !in hiddenSources() }
-        AlertDialog.Builder(this)
-            .setTitle(R.string.sources_title)
-            .setMultiChoiceItems(all.map { sourceLabel(it) }.toTypedArray(), checked) { _, which, on -> checked[which] = on }
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                if (checked.none { it }) return@setPositiveButton toast(getString(R.string.sources_need_one))
-                val hidden = hiddenSources().filter { it !in all } + all.filterIndexed { i, _ -> !checked[i] }
-                prefs.edit().putStringSet("rail_hidden", hidden.toSet()).apply()
-                updateRailButtons()
-                settingsPanel.refresh()
+        val avail = availableSources().toSet()
+        // 이 차에 있는 소스만 보여 주되, 순서는 전체 순서 안에서 바꿈 (없는 소스의 자리 · 설정은 그대로)
+        val order = railOrder().toMutableList()
+        val on = HashMap<String, Boolean>().apply { order.forEach { put(it, it !in hiddenSources()) } }
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(4), dp(12), 0) }
+        fun icon(k: String) = when (k) {
+            "spotify" -> R.drawable.ic_logo_spotify
+            "youtube" -> R.drawable.ic_logo_youtube
+            "usb" -> R.drawable.ic_logo_usb
+            "bt" -> R.drawable.ic_logo_bt
+            "radio" -> R.drawable.ic_logo_radio
+            "iradio" -> R.drawable.ic_logo_iradio
+            "ytmusic" -> R.drawable.ic_logo_ytmusic
+            else -> R.drawable.ic_music
+        }
+        fun render() {
+            list.removeAllViews()
+            val shown = order.filter { it in avail }
+            shown.forEachIndexed { i, k ->
+                list.addView(LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    addView(android.widget.CheckBox(this@MainActivity).apply {
+                        isChecked = on[k] == true
+                        setOnCheckedChangeListener { _, c -> on[k] = c }
+                    })
+                    addView(ImageView(this@MainActivity).apply {
+                        if (k == "flo") playerIcon(FLO_PKG)?.let { setImageDrawable(it) } ?: setImageResource(icon(k)) else setImageResource(icon(k))
+                    }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginStart = dp(4); marginEnd = dp(10) })
+                    addView(TextView(this@MainActivity).apply {
+                        text = sourceLabel(k)
+                        textSize = 17f
+                        setTextColor(getColor(R.color.text))
+                    }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                    fun move(d: Int) = View.OnClickListener {
+                        val other = shown.getOrNull(i + d) ?: return@OnClickListener
+                        val a = order.indexOf(k)
+                        val b = order.indexOf(other)
+                        order[a] = other
+                        order[b] = k
+                        render()
+                    }
+                    listOf("▲" to -1, "▼" to 1).forEach { (t, d) ->
+                        addView(TextView(this@MainActivity).apply {
+                            text = t
+                            textSize = 20f
+                            gravity = android.view.Gravity.CENTER
+                            setTextColor(getColor(R.color.accent))
+                            contentDescription = getString(if (d < 0) R.string.sources_up else R.string.sources_down)
+                            alpha = if (shown.getOrNull(i + d) == null) 0.25f else 1f
+                            setBackgroundResource(R.drawable.bg_rail_button)
+                            setOnClickListener(move(d))
+                        }, LinearLayout.LayoutParams(dp(52), dp(48)).apply { marginStart = dp(6) })
+                    }
+                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)))
             }
+        }
+        render()
+        val dlg = AlertDialog.Builder(this)
+            .setTitle(R.string.sources_title)
+            .setView(android.widget.ScrollView(this).apply { addView(list) })
+            .setPositiveButton(android.R.string.ok, null)
+            .setNeutralButton(R.string.sources_reset, null)
             .setNegativeButton(R.string.close, null)
             .show()
+        dlg.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+            order.clear()
+            order.addAll(RAIL_SOURCES.map { it.first })
+            render()
+        }
+        dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            if (avail.none { on[it] == true }) return@setOnClickListener toast(getString(R.string.sources_need_one))
+            val hidden = hiddenSources().filter { it !in avail } + avail.filter { on[it] != true }
+            prefs.edit().putStringSet("rail_hidden", hidden.toSet())
+                .putString("rail_order", order.joinToString(",")).apply()
+            updateRailButtons()
+            settingsPanel.refresh()
+            dlg.dismiss()
+        }
     }
 
     private fun radioComponent(): ComponentName? {
@@ -1483,6 +1619,140 @@ class MainActivity : Activity() {
     // ---- USB / MicroSD ----
 
     /** 플레이어로 USB/SD 선택: 라이브러리에 저장소 폴더를 보여준다 */
+    // ---- 인터넷 라디오 (0.78) ----
+
+    /** 위쪽 인터넷 라디오 버튼: 플레이어를 인터넷 라디오로 + 마지막 채널 재생 (이미 듣는 중이면 그대로) */
+    private fun selectIRadio() {
+        YtEngine.quiet()
+        pin(IRADIO_KEY)
+        rememberOtherApps()
+        if (!IRadioEngine.playing && !IRadioEngine.buffering) IRadioEngine.play(this, IRadioEngine.station ?: IRadioEngine.lastStation(this))
+        pickSession(force = true)
+        main.postDelayed({ if (pinned() == IRADIO_KEY) pickSession(force = true) }, 600) // 새 세션이 목록에 늦게 보일 때
+        updatePlayerChips()
+        updateRadioPresets()
+        if (listOpen) {
+            followPlayer()
+            loadList()
+        }
+    }
+
+    private fun playIRadio(s: IRadioApi.Station) {
+        if (pinned() != IRADIO_KEY) {
+            YtEngine.quiet()
+            pin(IRADIO_KEY)
+            rememberOtherApps()
+        }
+        IRadioEngine.play(this, s)
+        pickSession(force = true)
+        updatePlayerChips()
+        onIRadioChanged()
+        if (listOpen && listMode == ListMode.IRADIO) resetAutoClose()
+    }
+
+    /** 엔진 → 화면: 채널 · 방송 정보 · 연결 상태가 바뀜 */
+    private fun onIRadioChanged() {
+        if (!::iradioView.isInitialized) return
+        if (iradioView.view.visibility == View.VISIBLE) iradioView.render()
+        if (listOpen && (listMode == ListMode.IRADIO || listMode == ListMode.IR_SCHED)) {
+            main.removeCallbacks(iradioListRefresh)
+            main.postDelayed(iradioListRefresh, 300)
+        }
+    }
+
+    private val iradioListRefresh = Runnable {
+        if (!listOpen) return@Runnable
+        if (listMode == ListMode.IRADIO) showIRadioList(keepScroll = true)
+        else if (listMode == ListMode.IR_SCHED) showIRadioToday(keepScroll = true)
+    }
+
+    /** 라이브러리: 채널 목록 (로고 · 주파수 · 지금 프로그램 · 진행자 · 시간) */
+    private fun showIRadioList(keepScroll: Boolean = false) {
+        val list = IRadioApi.STATIONS
+        setHeader(getString(R.string.iradio_header_list, list.size))
+        val pos = listView.firstVisiblePosition
+        setRows(list.map { s ->
+            val now = IRadioApi.cached(s)?.now
+            Row(Kind.IR_STATION, "${s.name}  ·  ${s.freqText}",
+                now?.let { n -> listOfNotNull(n.title, n.dj.takeIf { it.isNotBlank() }?.let { getString(R.string.iradio_dj, it) },
+                    n.timeText.takeIf { it.isNotEmpty() }).joinToString(" · ") } ?: s.about,
+                id = s.id,
+                iconUri = IRadioApi.logo(this, s) { main.post { onIRadioChanged() } }?.let(Uri::parse),
+                active = s.id == IRadioEngine.station?.id)
+        }, "")
+        if (keepScroll) listView.setSelection(pos) else scrollToActive()
+        list.forEach { s -> IRadioApi.refreshIfStale(s) { main.post { onIRadioChanged() } } }
+    }
+
+    /** 재생 목록: 지금 채널의 오늘 편성표 (지금 프로그램 강조) */
+    private fun showIRadioToday(keepScroll: Boolean = false) {
+        val s = IRadioEngine.station ?: return showMessage(getString(R.string.iradio_pick_first))
+        setHeader(getString(R.string.iradio_header_today, s.name))
+        if (!IRadioApi.hasInfo(s)) return showMessage(getString(R.string.iradio_no_schedule, s.name, s.about))
+        val info = IRadioApi.cached(s)
+        if (info == null) {
+            showMessage(getString(R.string.loading))
+            IRadioApi.refresh(s, force = true) { main.post { onIRadioChanged() } }
+            return
+        }
+        val pos = listView.firstVisiblePosition
+        setRows(info.today.mapIndexed { i, p ->
+            Row(Kind.IR_PROGRAM, "${IRadioApi.hm(p.start)}  ${p.title}",
+                listOfNotNull(p.dj.takeIf { it.isNotBlank() }?.let { getString(R.string.iradio_dj, it) },
+                    p.subtitle.takeIf { it.isNotBlank() }, p.timeText,
+                    getString(R.string.iradio_on_now).takeIf { p == info.now }).joinToString(" · "),
+                queueId = i.toLong(),
+                iconUri = p.image.takeIf { it.isNotEmpty() }?.let(Uri::parse),
+                active = p == info.now)
+        }, getString(R.string.iradio_no_schedule, s.name, s.about))
+        if (keepScroll) listView.setSelection(pos) else scrollToActive()
+        IRadioApi.refreshIfStale(s) { main.post { onIRadioChanged() } }
+    }
+
+    /** 채널을 길게 누르면: 방송 정보 (지금 · 다음 프로그램, 소개, 홈페이지) */
+    private fun showIRadioInfo(s: IRadioApi.Station) {
+        val info = IRadioApi.cached(s)
+        val body = buildString {
+            appendLine("${s.freqText} · ${s.about}")
+            info?.now?.let { n ->
+                appendLine()
+                appendLine("${getString(R.string.iradio_on_now)}: ${n.title}  ${n.timeText}")
+                programLines(n).forEach { appendLine(it) }
+            }
+            info?.next?.let { n -> appendLine(); appendLine(getString(R.string.iradio_next, IRadioApi.hm(n.start), n.title)) }
+            if (IRadioEngine.station?.id == s.id) IRadioEngine.streamFormat?.let { appendLine(); appendLine(getString(R.string.iradio_stream, it)) }
+        }.trim()
+        AlertDialog.Builder(this)
+            .setTitle(s.name)
+            .setMessage(body)
+            .setPositiveButton(R.string.iradio_play) { _, _ -> playIRadio(s) }
+            .setNeutralButton(R.string.iradio_open_home) { _, _ -> openHome(info?.now?.homepage?.ifEmpty { null } ?: s.homepage) }
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    /** 편성표의 프로그램을 누르면: 자세한 정보 */
+    private fun showProgram(s: IRadioApi.Station, p: IRadioApi.Program) {
+        AlertDialog.Builder(this)
+            .setTitle(p.title)
+            .setMessage((listOf("${s.name} · ${p.timeText}") + programLines(p)).joinToString("\n"))
+            .setNeutralButton(R.string.iradio_open_home) { _, _ -> openHome(p.homepage.ifEmpty { s.homepage }) }
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    private fun programLines(p: IRadioApi.Program): List<String> = listOfNotNull(
+        p.subtitle.takeIf { it.isNotBlank() },
+        p.dj.takeIf { it.isNotBlank() }?.let { getString(R.string.iradio_dj, it) },
+        p.staff.takeIf { it.isNotBlank() }?.let { getString(R.string.iradio_staff, it) },
+        p.about.takeIf { it.isNotBlank() },
+    )
+
+    private fun openHome(url: String) {
+        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { toast(url) }
+    }
+
     private fun selectLocal() {
         YtEngine.quiet()
         pin(LOCAL_KEY)
@@ -1591,6 +1861,9 @@ class MainActivity : Activity() {
     /** 지금 플레이어가 USB/SD 인가 */
     private fun isLocalPlayer(): Boolean = currentPlayer() == LOCAL_KEY
 
+    /** 지금 플레이어가 인터넷 라디오인가 */
+    private fun isIRadioPlayer(): Boolean = currentPlayer() == IRADIO_KEY
+
     /** 라이브러리는 지금 선택된 플레이어의 목록: YT Music 이면 내 재생목록, 다른 앱이면 그 앱의 대기열/라이브러리 */
     private fun followPlayer() {
         // YouTube 영상 목록은 플레이어와 상관없음 — 라디오 · Spotify 를 듣는 중에 열어도 그 앱 라이브러리로 바꾸지 않음 (0.77)
@@ -1599,6 +1872,7 @@ class MainActivity : Activity() {
         listMode = when {
             isYtPlayer() -> if (library) ListMode.YOUTUBE else ListMode.YT_QUEUE
             isLocalPlayer() -> if (library) ListMode.LOCAL else ListMode.QUEUE
+            isIRadioPlayer() -> if (library) ListMode.IRADIO else ListMode.IR_SCHED
             else -> if (library) ListMode.LIBRARY else ListMode.QUEUE
         }
     }
@@ -1622,6 +1896,7 @@ class MainActivity : Activity() {
         btnLocal.isActivated = player == LOCAL_KEY
         btnBt.isActivated = player == BT_PKG
         if (::btnRadio.isInitialized) btnRadio.isActivated = player == MEDIA_PKG
+        if (::btnIRadio.isInitialized) btnIRadio.isActivated = player == IRADIO_KEY
         if (::btnFlo.isInitialized) btnFlo.isActivated = player == FLO_PKG
     }
 
@@ -2150,6 +2425,11 @@ class MainActivity : Activity() {
                 if (ok) main.postDelayed({ pickSession(force = true) }, 500)
             }
         }
+        // 마지막 플레이어가 인터넷 라디오이고 끄기 전 듣던 중이면 그 방송을 다시 (0.78)
+        if (pinned() == IRADIO_KEY && IRadioEngine.station == null && YtEngine.isResumeOnStart(this) && IRadioEngine.lastWasPlaying(this)) {
+            IRadioEngine.play(this, IRadioEngine.lastStation(this))
+            main.postDelayed({ pickSession(force = true) }, 500)
+        }
         // 시동 직후에도 Spotify 가 바로 재생 · 라이브러리를 받게 — 마지막 플레이어가 Spotify 일 때만 (0.51)
         if (pinned()?.startsWith("com.spotify") == true) {
             bindSpotifyWrapper()
@@ -2558,6 +2838,7 @@ class MainActivity : Activity() {
         val c = controller ?: return when (val p = pinned()) {
             null, packageName -> mediaKey(KeyEvent.KEYCODE_MEDIA_PLAY)
             LOCAL_KEY -> LocalEngine.play()
+            IRADIO_KEY -> IRadioEngine.play()
             BT_PKG -> withBtController { it.transportControls.play() }
             else -> if (isSpotifyPlayer()) withSpotifyController { it.transportControls.play() } else wakeApp(p)
         }
@@ -2618,6 +2899,7 @@ class MainActivity : Activity() {
         updateRadioPresets()
         when (val p = currentPlayer()) {
             LOCAL_KEY -> sourceIcon.setImageResource(R.drawable.ic_logo_usb)
+            IRADIO_KEY -> sourceIcon.setImageResource(R.drawable.ic_logo_iradio)
             BT_PKG -> sourceIcon.setImageResource(R.drawable.ic_logo_bt)
             MEDIA_PKG -> sourceIcon.setImageResource(R.drawable.ic_logo_radio)
             // D-Player 안의 YouTube 재생: D-Player 아이콘 대신 YT Music / YouTube 로고 (0.68)
@@ -2702,6 +2984,8 @@ class MainActivity : Activity() {
         if (listMode == ListMode.YOUTUBE) return showYtLibrary()
         if (listMode == ListMode.YT_QUEUE) return showYtQueue()
         if (listMode == ListMode.LOCAL) return showLocal()
+        if (listMode == ListMode.IRADIO) return showIRadioList()
+        if (listMode == ListMode.IR_SCHED) return showIRadioToday()
         val pkg = controller?.packageName?.let { if (it == FLO_BYD) FLO_PKG else it }
             ?: (if (isSpotifyPlayer()) spotifyPackage() else if (pinned() == FLO_PKG) FLO_PKG else null)
             ?: return showMediaApps()
@@ -3017,6 +3301,10 @@ class MainActivity : Activity() {
     private fun onRowClick(row: Row) {
         val c = controller
         when (row.kind) {
+            Kind.IR_STATION -> IRadioApi.station(row.id)?.let { playIRadio(it) }
+            Kind.IR_PROGRAM -> IRadioEngine.station?.let { s ->
+                IRadioApi.cached(s)?.today?.getOrNull(row.queueId.toInt())?.let { showProgram(s, it) }
+            }
             Kind.UP -> if (listMode == ListMode.LOCAL) {
                 localUp()
             } else if (listMode == ListMode.YOUTUBE) {
@@ -3131,6 +3419,7 @@ class MainActivity : Activity() {
     // ---- 유틸 ----
 
     private fun appLabel(pkg: String?): String = if (pkg == LOCAL_KEY) LocalEngine.label
+    else if (pkg == IRADIO_KEY) getString(R.string.iradio_title)
     else if (pkg == BT_PKG) getString(R.string.bt_title)
     else if (pkg == MEDIA_PKG) getString(R.string.radio_title)
     else if (pkg == packageName) YtEngine.site.label else pkg?.let {
@@ -3248,6 +3537,8 @@ class MainActivity : Activity() {
             name.setTextColor(getColor(if (active) R.color.accent else R.color.text))
 
             val thumb = v.findViewById<ImageView>(R.id.itemThumb)
+            // 방송사 로고는 가로로 길어 잘리지 않게 (0.78)
+            thumb.scaleType = if (row.kind == Kind.IR_STATION) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
             when (row.kind) {
                 Kind.UP -> { thumb.tag = null; thumb.setImageResource(R.drawable.ic_back) }
                 Kind.YT_PLAY_ALL, Kind.PLAY_ALL, Kind.LOCAL_PLAY_ALL -> { thumb.tag = null; thumb.setImageResource(R.drawable.ic_shuffle) }
@@ -3263,6 +3554,7 @@ class MainActivity : Activity() {
                 Kind.YT_MYLIB -> { thumb.tag = null; thumb.setImageResource(R.drawable.ic_library_music) }
                 Kind.YT_RETRY -> { thumb.tag = null; thumb.setImageResource(R.drawable.ic_refresh) }
                 Kind.FOLDER, Kind.YT_BROWSE -> images.load(thumb, row.icon, row.iconUri, R.drawable.ic_folder)
+                Kind.IR_STATION, Kind.IR_PROGRAM -> images.load(thumb, null, row.iconUri, R.drawable.ic_logo_iradio)
                 else -> images.load(thumb, row.icon, row.iconUri, R.drawable.ic_music)
             }
             return v
@@ -3278,6 +3570,8 @@ class MainActivity : Activity() {
         const val RADIO_MAX_STEPS = 40
         /** USB/SD 플레이어 구분 키 (D-Player 안의 두 번째 세션) */
         const val LOCAL_KEY = "dplayer.local"
+        /** 플레이어 키: D-Player 안의 인터넷 라디오 (0.78) */
+        const val IRADIO_KEY = "dplayer.iradio"
         /** 차의 블루투스 음악 플레이어 (AOSP Bluetooth 앱의 AVRCP 조정 세션) */
         const val BT_PKG = "com.android.bluetooth"
         const val MEDIA_PKG = "com.byd.mediacenter"
@@ -3308,6 +3602,7 @@ class MainActivity : Activity() {
             "usb" to R.string.local_title,
             "bt" to R.string.bt_title,
             "radio" to R.string.radio_title,
+            "iradio" to R.string.iradio_title,
             "ytmusic" to R.string.yt_music,
         )
         /** 차량(BYD)용 Spotify 화면 앱. 이 앱이 한 번 떠야 Spotify 엔진(com.spotify.music)이 로그인 상태로 준비된다 */
