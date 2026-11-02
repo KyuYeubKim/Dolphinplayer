@@ -141,6 +141,9 @@ class MainActivity : Activity() {
     /** 라디오 저장 채널 (0.73): 라디오가 플레이어이고 차량 제어 패널이 안 보일 때 앨범 이미지 자리에 */
     private lateinit var radioPresets: RadioPresets
     private var radioShown = false
+    /** 앨범 이미지 위·아래 빈칸 (0.77): 차량 제어 패널을 켜 두면 앨범 화면에서도 아래쪽 재생 버튼을 맨 아래에 붙여 패널 화면과 같은 자리 */
+    private lateinit var coverSpaceTop: View
+    private lateinit var coverSpaceBottom: View
     private var carShown = false
     /** 재생 중 패널을 옆으로 밀어 앨범 이미지를 보는 중 (멈춰서 패널이 닫히면 풀림 → 다음 재생 땐 다시 패널) */
     private var carUserCover = false
@@ -422,6 +425,12 @@ class MainActivity : Activity() {
             (playerContent as LinearLayout).indexOfChild(findViewById(R.id.btnSource)) + 1,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(40)).apply { topMargin = dp(6) })
         renderFavorites()
+        coverSpaceTop = View(this).apply { visibility = View.GONE }
+        coverSpaceBottom = View(this).apply { visibility = View.GONE }
+        (playerContent as LinearLayout).addView(coverSpaceTop, (playerContent as LinearLayout).indexOfChild(cover),
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        (playerContent as LinearLayout).addView(coverSpaceBottom, (playerContent as LinearLayout).indexOfChild(findViewById(R.id.infoRow)),
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         btnLibrary = findViewById(R.id.btnLibrary)
         btnLibrary.setOnClickListener { toggleList(library = true) }
         btnQueue = findViewById(R.id.btnQueue)
@@ -636,6 +645,10 @@ class MainActivity : Activity() {
         // 차량 제어 패널이 보이면 재생 버튼 · 재생 목록/라이브러리를 조금 작게 → 패널 자리 확보 (0.63)
         // 차량 제어 패널을 켜 두면 앨범 이미지일 때도 같은 크기 (밀어서 바꿀 때 버튼이 커졌다 작아졌다 하지 않게, 0.74)
         val small = carShown || radioShown || CarPanel.isEnabled(this)
+        // 패널 · 채널 목록이 남는 높이를 차지하지 않을 때(앨범 이미지)는 빈칸이 대신 차지 → 재생 버튼 줄이 늘 맨 아래 (0.77)
+        val spacer = if (small && !carShown && !radioShown) View.VISIBLE else View.GONE
+        coverSpaceTop.visibility = spacer
+        coverSpaceBottom.visibility = spacer
         val rowDp = minOf(560, paneDp - 24) - 32
         val btnDp = rowDp / 5.3f
         val ctrlH = if (small) 48 else 64
@@ -806,7 +819,7 @@ class MainActivity : Activity() {
         titleBox.layoutParams = if (on) LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.4f)
         else LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         progressBox.layoutParams = if (on) LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.6f)
-            .apply { marginStart = dp(12) }
+            .apply { marginStart = dp(12); gravity = android.view.Gravity.BOTTOM } // 진행바를 앨범 화면과 같은 높이에 (0.77)
         else LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             .apply { topMargin = dp(20) }
         val g = if (on) android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL else android.view.Gravity.CENTER
@@ -1580,6 +1593,8 @@ class MainActivity : Activity() {
 
     /** 라이브러리는 지금 선택된 플레이어의 목록: YT Music 이면 내 재생목록, 다른 앱이면 그 앱의 대기열/라이브러리 */
     private fun followPlayer() {
+        // YouTube 영상 목록은 플레이어와 상관없음 — 라디오 · Spotify 를 듣는 중에 열어도 그 앱 라이브러리로 바꾸지 않음 (0.77)
+        if (ytVideoMode && listMode == ListMode.YOUTUBE) return
         val library = isLibraryMode()
         listMode = when {
             isYtPlayer() -> if (library) ListMode.YOUTUBE else ListMode.YT_QUEUE
