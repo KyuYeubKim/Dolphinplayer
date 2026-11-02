@@ -54,8 +54,18 @@ object CarRadio {
         params.forEach { (k, v) -> set.invoke(p, k, v) }
         cls.getMethod("controlMedia", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, pcls)
             .invoke(dev, mode, action, p) as Int
-    }.onFailure { YtLog.e("라디오 SDK 명령 실패: ${(it.cause ?: it).javaClass.simpleName}: ${(it.cause ?: it).message}") }
+    }.onSuccess { lastError = null }
+        .onFailure {
+            val e = it.cause ?: it
+            lastError = "${e.javaClass.simpleName}: ${e.message}"
+            YtLog.e("라디오 SDK 명령 실패: $lastError")
+        }
         .getOrNull()
 
-    fun describe(c: Context) = "라디오: 권한=${if (hasPermission(c)) "있음" else "없음"} · 지금 미디어 종류=${mediaType(c) ?: "모름"}"
+    /** 마지막 SDK 명령이 실패한 이유 (진단 · 안내용, 0.75) */
+    @Volatile var lastError: String? = null
+        private set
+
+    fun describe(c: Context) = "라디오: 권한=${if (hasPermission(c)) "있음" else "없음"} · 지금 미디어 종류=${mediaType(c) ?: "모름"}" +
+        (lastError?.let { " · 마지막 실패=$it" } ?: "")
 }

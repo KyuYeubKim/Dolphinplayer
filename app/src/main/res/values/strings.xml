@@ -237,4 +237,5 @@
     <string name="radio_delete">지우기</string>
     <string name="radio_tuning">%1$s 로 바꾸는 중…</string>
     <string name="radio_tune_failed">채널을 바꾸지 못했습니다 (진단 로그에 이유)</string>
+    <string name="radio_tune_no_perm">채널을 바꾸지 못했습니다 — 차 라디오 제어 권한을 받지 못했어요. 설정 → 권한 다시 설정 후 다시 눌러 주세요 (진단 로그에 이유)</string>
 </resources>

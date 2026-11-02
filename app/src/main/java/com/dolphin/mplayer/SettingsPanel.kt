@@ -113,7 +113,10 @@ class SettingsPanel(private val a: Activity, private val actions: Actions) {
                 intArrayOf(a.getColor(R.color.accent), 0xFFBDBDBD.toInt()))
             setOnCheckedChangeListener { _, on ->
                 StatusTicker.setMode(a, if (on) StatusTicker.Mode.BOTTOM else StatusTicker.Mode.OFF)
-                if (on) ensureOverlay()
+                if (on) {
+                    MediaListenerService.ensureTicker() // 띠 서비스가 아직 안 돌고 있으면 시작 (0.75)
+                    ensureOverlay()
+                }
                 build()
             }
         }
@@ -259,7 +262,8 @@ class SettingsPanel(private val a: Activity, private val actions: Actions) {
         Thread {
             val ok = com.dolphin.mplayer.adb.AdbProvisioner.grantOverlay(a)
             a.runOnUiThread {
-                if (ok) return@runOnUiThread
+                // 권한을 막 받았으면 곡이 바뀌길 기다리지 않고 바로 띠를 띄운다 (0.75)
+                if (ok) return@runOnUiThread StatusTicker.refresh(a)
                 val opened = runCatching {
                     a.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         android.net.Uri.parse("package:" + a.packageName)))

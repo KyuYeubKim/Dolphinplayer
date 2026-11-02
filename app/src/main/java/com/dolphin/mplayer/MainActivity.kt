@@ -671,6 +671,22 @@ class MainActivity : Activity() {
         updateCarPanel()
     }
 
+    /**
+     * 재생 정보 띠 (0.75): 설정 화면 등에서 권한을 받고 돌아왔으면 곡이 바뀌길 기다리지 않고 다시 그리고,
+     * 켜져 있는데 띠 서비스(알림 접근 서비스 안)가 안 돌면 시스템에 다시 연결을 부탁한다 (동의 전에 연결된 경우 등)
+     */
+    private fun checkTicker() {
+        if (StatusTicker.mode(this) == StatusTicker.Mode.OFF) return
+        if (StatusTicker.running) return StatusTicker.refresh(this)
+        if (!hasListenerAccess()) return
+        if (MediaListenerService.ensureTicker()) return YtLog.e("재생 정보 띠: 서비스는 연결돼 있었음 → 띠 시작")
+        YtLog.e("재생 정보 띠: 서비스가 연결돼 있지 않아 다시 연결 요청")
+        runCatching {
+            android.service.notification.NotificationListenerService.requestRebind(
+                ComponentName(this, MediaListenerService::class.java))
+        }.onFailure { YtLog.e("재생 정보 띠 다시 연결 실패: ${it.message}") }
+    }
+
     // ---- 라디오 저장 채널 (0.73) ----
 
     /** 라디오가 플레이어면(차량 제어 패널이 안 보일 때) 앨범 이미지 대신 저장 채널. layout=false 면 배치는 부르는 쪽이 */
@@ -710,12 +726,15 @@ class MainActivity : Activity() {
             updatePlayerChips()
         }
         Thread {
-            if (!CarRadio.hasPermission(this) && AdbProvisioner.isReady(this))
+            // 0.75: '항상 허용' 기록과 상관없이 권한을 받아 본다 (허용 창 없는 접속이라 안전) — 0.74 는 기록이 없으면 건너뛰었음
+            if (!CarRadio.hasPermission(this))
                 YtLog.e("라디오 권한 받기: ${if (AdbProvisioner.grantPermissions(this, CarRadio.PERMISSIONS)) "됨" else "안 됨"}")
-            val r = if (CarRadio.hasPermission(this)) CarRadio.tune(this, s.band, s.khz) else null
-            YtLog.e("라디오 채널 바꾸기: ${s.label} ${s.name} (band=${s.band} khz=${s.khz}) → 결과=${r ?: "못 함"}")
+            val permitted = CarRadio.hasPermission(this)
+            // 권한이 없다고 나와도 한 번은 불러 본다 (펌웨어마다 검사하는 곳이 달라, 실패 이유가 진단 로그에 남는다)
+            val r = CarRadio.tune(this, s.band, s.khz)
+            YtLog.e("라디오 채널 바꾸기: ${s.label} ${s.name} (band=${s.band} khz=${s.khz}) → 결과=${r ?: "못 함"} · ${CarRadio.describe(this)}")
             main.post {
-                if (r == null) toast(getString(R.string.radio_tune_failed))
+                if (r == null) toast(getString(if (permitted) R.string.radio_tune_failed else R.string.radio_tune_no_perm))
                 main.postDelayed({ pickSession(force = true) }, 1200)
             }
         }.start()
@@ -1213,6 +1232,7 @@ class MainActivity : Activity() {
             if (c.packageName == MEDIA_PKG) appendLine("  미디어센터: ${describeSession(c)} · 라디오로 보임=${looksLikeRadio(c)}")
         }
         if (radioComponent() != null) appendLine(CarRadio.describe(this@MainActivity))
+        appendLine(StatusTicker.diag(this@MainActivity))
         append("블루투스: 플레이어 서비스=${btService()?.className ?: "없음(꺼짐)"}, 휴대폰 연결=${btPhoneConnected()}, " +
             "연결한 컨트롤러=${btCtl != null} 상태=${btCtl?.playbackState?.state} 곡='${btCtl?.metadata?.description?.title ?: ""}'")
     }
@@ -1240,8 +1260,8 @@ class MainActivity : Activity() {
             return
         }
         Thread {
-            // 처음 한 번: SDK 권한을 ADB 로 D-Player 자신에게 (항상 허용된 키가 있을 때만 — 허용 창 없음)
-            if (!CarRadio.hasPermission(this) && AdbProvisioner.isReady(this)) {
+            // 처음 한 번: SDK 권한을 ADB 로 D-Player 자신에게 (허용 창 없는 접속 — 키가 허용돼 있지 않으면 조용히 실패)
+            if (!CarRadio.hasPermission(this)) {
                 val ok = AdbProvisioner.grantPermissions(this, CarRadio.PERMISSIONS)
                 YtLog.e("라디오 권한 받기: ${if (ok) "됨" else "안 됨"}")
             }
@@ -1965,6 +1985,7 @@ class MainActivity : Activity() {
         // 설치 · 업데이트 뒤 처음: 이용 안내에 동의(카페 닉네임 포함)해야 권한 설정 · 재생을 시작한다 (0.58)
         if (!termsAgreed()) return showTerms(firstRun = true)
         CafeRegister.onAppStart(this) // 닉네임을 이 버전에 아직 안 보냈으면 한 번 보냄 (중복은 안에서 막음)
+        checkTicker()
         if (granting) {
             grantEvents.append(grantTime()).append(" 화면 돌아옴 (onResume)\n")
             // 허용 창에서 답하고 돌아온 것 → 응답이 없으면 곧바로 새 연결로 확인하게

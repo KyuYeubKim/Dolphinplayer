@@ -17,6 +17,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.TextView
+import com.dolphin.mplayer.youtube.YtLog
 
 /**
  * 지금 재생 중인 곡(제목 · 가수)을 반투명 띠로 띄운다 (설정 → 재생 → 재생 정보 표시).
@@ -49,6 +50,22 @@ class StatusTicker(private val ctx: Context) {
 
         fun resetPosition(c: Context) =
             c.getSharedPreferences("player", Context.MODE_PRIVATE).edit().remove(POS_X).remove(POS_Y).apply()
+
+        /** 권한을 막 받았을 때 등: 곡이 바뀌지 않아도 다시 그리게 (0.75) */
+        const val REFRESH = "status_ticker_refresh"
+
+        fun refresh(c: Context) =
+            c.getSharedPreferences("player", Context.MODE_PRIVATE).edit().putLong(REFRESH, System.currentTimeMillis()).apply()
+
+        /** 진단용: 띠가 돌고 있는지 · 마지막으로 그린 결과 (0.75) */
+        @Volatile var running = false
+            private set
+        @Volatile var lastState = "아직 안 그림"
+            private set
+
+        fun diag(c: Context) = "재생 정보 표시: 설정=${if (mode(c) == Mode.OFF) "꺼짐" else "켜짐"} · " +
+            "다른 앱 위 권한=${if (Settings.canDrawOverlays(c)) "있음" else "없음"} · " +
+            "띠 서비스=${if (running) "돌고 있음" else "안 돎"} · 마지막=$lastState"
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -63,11 +80,12 @@ class StatusTicker(private val ctx: Context) {
 
     private val sessionsListener = MediaSessionManager.OnActiveSessionsChangedListener { list -> watch(list) }
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == PREF_KEY) render()
+        if (key == PREF_KEY || key == REFRESH) render()
         if (key == POS_X || key == POS_Y) view?.let { if (!dragging) place(it) }
     }
 
     fun start() {
+        running = true
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         runCatching {
             sessions.addOnActiveSessionsChangedListener(sessionsListener, component, main)
@@ -77,6 +95,7 @@ class StatusTicker(private val ctx: Context) {
     }
 
     fun stop() {
+        running = false
         prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         runCatching { sessions.removeOnActiveSessionsChangedListener(sessionsListener) }
         watched.values.forEach { (c, cb) -> runCatching { c.unregisterCallback(cb) } }
@@ -111,7 +130,20 @@ class StatusTicker(private val ctx: Context) {
             val playing = watched.values.map { it.first }
                 .firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
             val text = playing?.let { describe(it) }
-            if (mode == Mode.OFF || text == null || !Settings.canDrawOverlays(ctx)) hide() else show(mode, text)
+            val canDraw = Settings.canDrawOverlays(ctx)
+            if (mode == Mode.OFF || text == null || !canDraw) hide() else show(mode, text)
+            val state = when {
+                mode == Mode.OFF -> "꺼짐"
+                playing == null -> "재생 중인 앱 없음 (세션 ${watched.size}개)"
+                text == null -> "${playing.packageName} 곡 정보 없음"
+                !canDraw -> "다른 앱 위 권한 없음"
+                view == null -> "창 띄우기 실패 ($addError)"
+                else -> "보임 (${playing.packageName})"
+            }
+            if (state != lastState) {
+                lastState = state
+                YtLog.e("재생 정보 띠: $state")
+            }
         }
     }
 
@@ -126,6 +158,7 @@ class StatusTicker(private val ctx: Context) {
     private fun dp(v: Int) = (v * ctx.resources.displayMetrics.density).toInt()
 
     private var lp: WindowManager.LayoutParams? = null
+    private var addError: String? = null
     private var dragging = false
 
     private fun screenSize(): android.graphics.Point = android.graphics.Point().also {
@@ -189,7 +222,9 @@ class StatusTicker(private val ctx: Context) {
         }
         lp = p
         t.setOnTouchListener(DragListener(t))
-        if (runCatching { wm.addView(t, p) }.isSuccess) {
+        val added = runCatching { wm.addView(t, p) }
+        addError = added.exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" }
+        if (added.isSuccess) {
             view = t
             shownMode = Mode.BOTTOM
             t.post { place(t) }
