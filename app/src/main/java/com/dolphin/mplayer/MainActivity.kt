@@ -704,8 +704,10 @@ class MainActivity : Activity() {
     }
 
     /** 미디어센터 재생 정보에서 지금 채널 (주파수 + 방송 이름) */
-    private fun currentRadioStation(): RadioPresets.Station? {
-        val c = controller?.takeIf { it.packageName == MEDIA_PKG } ?: return null
+    private fun currentRadioStation(): RadioPresets.Station? =
+        controller?.takeIf { it.packageName == MEDIA_PKG }?.let { radioStationOf(it) }
+
+    private fun radioStationOf(c: MediaController): RadioPresets.Station? {
         val m = c.metadata ?: return null
         val d = m.description
         val texts = listOfNotNull(
@@ -716,28 +718,74 @@ class MainActivity : Activity() {
         return RadioPresets.parse(texts)
     }
 
-    /** 저장 채널 누름: 화면 없이 그 주파수로 (BYD SDK, 권한이 없으면 라디오 버튼 때처럼 ADB 로 한 번 받음) */
+    private var radioStep: Runnable? = null
+
+    /**
+     * 저장 채널 누름 (0.76): 차 라디오의 다음/이전(재생 세션 버튼)을 눌러 그 주파수가 나올 때까지 넘긴다.
+     * 주파수를 바로 지정하는 BYD SDK 권한(BYDAUTO_MULTIMEDIA_SET)과 미디어센터 서비스(STARTSERVER)는 펌웨어에서
+     * BYD 서명 · 시스템 앱 전용(protectionLevel signature / signatureOrSystem)이라 ADB 로도 받을 수 없다
+     * (2026-11-02 차 진단: pm grant 뒤에도 권한=없음, 펌웨어 com.byd.auto.permission 매니페스트로 확인). 우회는 하지 않는다.
+     * 권한이 있는 펌웨어라면 SDK 로 바로 바꾼다.
+     */
     private fun tuneRadio(s: RadioPresets.Station) {
-        toast(getString(R.string.radio_tuning, s.label))
+        radioStep?.let { main.removeCallbacks(it) }
+        radioStep = null
         if (pinned() != MEDIA_PKG) {
             YtEngine.quiet()
             pin(MEDIA_PKG)
             rememberOtherApps()
             updatePlayerChips()
         }
-        Thread {
-            // 0.75: '항상 허용' 기록과 상관없이 권한을 받아 본다 (허용 창 없는 접속이라 안전) — 0.74 는 기록이 없으면 건너뛰었음
-            if (!CarRadio.hasPermission(this))
-                YtLog.e("라디오 권한 받기: ${if (AdbProvisioner.grantPermissions(this, CarRadio.PERMISSIONS)) "됨" else "안 됨"}")
-            val permitted = CarRadio.hasPermission(this)
-            // 권한이 없다고 나와도 한 번은 불러 본다 (펌웨어마다 검사하는 곳이 달라, 실패 이유가 진단 로그에 남는다)
-            val r = CarRadio.tune(this, s.band, s.khz)
-            YtLog.e("라디오 채널 바꾸기: ${s.label} ${s.name} (band=${s.band} khz=${s.khz}) → 결과=${r ?: "못 함"} · ${CarRadio.describe(this)}")
-            main.post {
-                if (r == null) toast(getString(if (permitted) R.string.radio_tune_failed else R.string.radio_tune_no_perm))
-                main.postDelayed({ pickSession(force = true) }, 1200)
+        val c = activeSessions().firstOrNull { it.packageName == MEDIA_PKG && looksLikeRadio(it) }
+            ?: return toast(getString(R.string.radio_tune_need_radio))
+        val start = radioStationOf(c)
+        if (start?.same(s) == true) return
+        toast(getString(R.string.radio_tuning, s.label))
+        if (CarRadio.hasPermission(this)) {
+            Thread {
+                val r = CarRadio.tune(this, s.band, s.khz)
+                YtLog.e("라디오 채널 바꾸기 (SDK): ${s.label} → 결과=${r ?: "못 함"} · ${CarRadio.describe(this)}")
+                main.post { if (r == null) toast(getString(R.string.radio_tune_failed)) }
+            }.start()
+            return
+        }
+        // 위로 갈지 아래로 갈지: 같은 대역에서 목표가 더 높으면 다음, 낮으면 이전 (차가 '다음'을 즐겨찾기 순서로 넘겨도 한 바퀴 안에 만남)
+        val up = start == null || start.band != s.band || s.khz > start.khz
+        val seen = HashSet<Long>()
+        var steps = 0
+        var last: RadioPresets.Station? = null
+        var waited = 0
+        fun key(x: RadioPresets.Station) = x.band * 10_000_000L + x.khz
+        fun finish(ok: Boolean, why: String) {
+            radioStep = null
+            YtLog.e("라디오 채널 바꾸기 (${if (up) "다음" else "이전"} 버튼): ${s.label} ← ${start?.label ?: "?"} · ${steps}번 · $why")
+            if (!ok) toast(getString(R.string.radio_step_failed, s.label))
+        }
+        val step = object : Runnable {
+            override fun run() {
+                if (radioStep !== this) return
+                if (pinned() != MEDIA_PKG) return finish(false, "플레이어 바뀜")
+                val cc = activeSessions().firstOrNull { it.packageName == MEDIA_PKG } ?: return finish(false, "라디오 재생 정보 없음")
+                val now = radioStationOf(cc)
+                if (now?.same(s) == true) return finish(true, "맞춤")
+                // 버튼을 누른 뒤 주파수가 바뀔 때까지 기다림 (최대 4초 — 차가 신호를 찾는 동안)
+                if (steps > 0 && now?.khz == last?.khz && waited < 4000) {
+                    waited += 250
+                    main.postDelayed(this, 250)
+                    return
+                }
+                if (now != null && !seen.add(key(now))) return finish(false, "한 바퀴 돌았는데 없음 (지금 ${now.label})")
+                if (now == null && steps > 0) return finish(false, "주파수를 못 읽음")
+                if (steps >= RADIO_MAX_STEPS) return finish(false, "${RADIO_MAX_STEPS}번 넘겨도 없음")
+                last = now
+                waited = 0
+                steps++
+                if (up) cc.transportControls.skipToNext() else cc.transportControls.skipToPrevious()
+                main.postDelayed(this, 400)
             }
-        }.start()
+        }
+        radioStep = step
+        main.post(step)
     }
 
     // ---- 재생 중 차량 제어 패널 (0.61) ----
@@ -3211,6 +3259,8 @@ class MainActivity : Activity() {
         const val TERMS_KEY = "terms_accepted_v1"
         /** 이용 안내에 동의한 versionCode (0.58~ : 버전마다 다시 묻기) */
         const val AGREED_CODE = "agreed_code"
+        /** 저장 채널로 갈 때 다음/이전 버튼을 누르는 최대 횟수 (0.76) */
+        const val RADIO_MAX_STEPS = 40
         /** USB/SD 플레이어 구분 키 (D-Player 안의 두 번째 세션) */
         const val LOCAL_KEY = "dplayer.local"
         /** 차의 블루투스 음악 플레이어 (AOSP Bluetooth 앱의 AVRCP 조정 세션) */

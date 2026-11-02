@@ -1,7 +1,6 @@
 package com.dolphin.mplayer.adb
 
 import android.content.Context
-import com.dolphin.mplayer.CarRadio
 import com.dolphin.mplayer.MediaListenerService
 import com.dolphin.mplayer.youtube.YtLog
 
@@ -91,10 +90,6 @@ object AdbProvisioner {
         // 상단 바 재생 정보 표시용 (다른 앱 위에 표시)
         val overlay = runOk(adb, "appops set $pkg SYSTEM_ALERT_WINDOW allow")
         sum.append(if (overlay) "✔ 다른 앱 위에 표시 (상단 바 재생 정보)\n" else "· 다른 앱 위에 표시 (이 펌웨어 미지원)\n")
-
-        // 차 라디오 제어 (화면 없이 라디오 켜기 · 저장 채널로 바꾸기, 0.75)
-        val radio = CarRadio.PERMISSIONS.map { runOk(adb, "pm grant $pkg $it") }.any { it }
-        sum.append(if (radio) "✔ 차 라디오 제어 (저장 채널)\n" else "· 차 라디오 제어 (이 펌웨어 미지원)\n")
         adb.close()
 
         // '항상 허용'이 저장됐는지: 허용 창 없이 새로 접속해 본다
@@ -125,7 +120,8 @@ object AdbProvisioner {
         val ok = permissions.map { perm ->
             val out = adb.shell("pm grant ${app.packageName} $perm")
             val t = out?.trim().orEmpty()
-            val granted = out != null && (t.isEmpty() || t.lowercase().let { "success" in it || "granted" in it })
+            // 출력으로는 판단하지 않는다: 펌웨어가 거절해도 빈 출력이 올 수 있음 (0.74 '됨' 이었는데 권한 없음, 2026-11-02)
+            val granted = app.checkSelfPermission(perm) == android.content.pm.PackageManager.PERMISSION_GRANTED
             YtLog.e("권한 받기 ${perm.substringAfterLast('.')}: ${if (granted) "됨" else "안 됨 · ${out?.let { t.take(160) } ?: "응답 없음"}"}")
             granted
         }.any { it }
