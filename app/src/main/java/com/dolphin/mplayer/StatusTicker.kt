@@ -77,6 +77,11 @@ class StatusTicker(private val ctx: Context) {
     private val watched = HashMap<SessionKey, Pair<MediaController, MediaController.Callback>>()
     private var view: TextView? = null
     private var shownMode: Mode? = null
+    private var shownKey: SessionKey? = null
+    private val LOADING = setOf(
+        PlaybackState.STATE_BUFFERING, PlaybackState.STATE_CONNECTING,
+        PlaybackState.STATE_SKIPPING_TO_NEXT, PlaybackState.STATE_SKIPPING_TO_PREVIOUS, PlaybackState.STATE_SKIPPING_TO_QUEUE_ITEM,
+    )
 
     private val sessionsListener = MediaSessionManager.OnActiveSessionsChangedListener { list -> watch(list) }
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -127,8 +132,11 @@ class StatusTicker(private val ctx: Context) {
     private fun render() {
         main.post {
             val mode = mode(ctx)
-            val playing = watched.values.map { it.first }
-                .firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+            // 채널 · 곡을 바꾸는 동안(받는 중)은 보이던 띠를 그대로 둔다 (0.79)
+            val hit = watched.entries.firstOrNull { it.value.first.playbackState?.state == PlaybackState.STATE_PLAYING }
+                ?: watched.entries.firstOrNull { it.key == shownKey && it.value.first.playbackState?.state in LOADING }
+            shownKey = hit?.key
+            val playing = hit?.value?.first
             val text = playing?.let { describe(it) }
             val canDraw = Settings.canDrawOverlays(ctx)
             if (mode == Mode.OFF || text == null || !canDraw) hide() else show(mode, text)

@@ -1,6 +1,7 @@
 package com.dolphin.mplayer.iradio
 
 import android.content.Context
+import com.dolphin.mplayer.R
 import com.dolphin.mplayer.RadioInfo
 import com.dolphin.mplayer.youtube.YtLog
 import org.json.JSONArray
@@ -47,6 +48,8 @@ object IRadioApi {
         val homepage: String,
         /** radio-browser 로고 찾기 (RadioInfo, KBS 는 채널 API 의 로고) */
         val logoQuery: String = "",
+        /** 앱에 넣어 둔 로고 (radio-browser 에 없거나 작게 보이는 방송, 0.79) */
+        val logoRes: Int = 0,
     ) {
         val name: String get() = "$broadcaster $channel".trim()
         val freqText: String get() = if (freq.isEmpty()) "인터넷" else freq
@@ -59,25 +62,25 @@ object IRadioApi {
         Station("kbs_classic", "KBS", "클래식FM", "FM 93.1", Source.Kbs("24"), "KBS 1FM · 클래식 · 국악", "https://program.kbs.co.kr/radio/1fm/"),
         Station("kbs_3r", "KBS", "3라디오", "FM 104.9", Source.Kbs("23"), "KBS 3라디오 · 사랑의소리방송", "https://program.kbs.co.kr/radio/3radio/"),
         Station("kbs_hmj", "KBS", "한민족방송", "AM 972", Source.Kbs("26"), "KBS 한민족방송 · 해외 동포 · 북한 대상", "https://program.kbs.co.kr/radio/hanminjok/"),
-        Station("mbc_fm4u", "MBC", "FM4U", "FM 91.9", Source.Mbc("mfm", "FM4U"), "MBC FM4U · 음악 전문", "https://www.imbc.com/broad/radio/fm4u/", "MBC FM4U"),
-        Station("mbc_std", "MBC", "표준FM", "FM 95.9", Source.Mbc("sfm", "FM"), "MBC 표준FM · 시사 · 교양 · 음악", "https://www.imbc.com/broad/radio/fm/", "MBC FM"),
-        Station("mbc_chm", "MBC", "올댓뮤직", "", Source.Mbc("chm", "CHM"), "MBC 올댓뮤직 · 인터넷 음악 채널", "https://mini.imbc.com/", "MBC"),
-        Station("sbs_power", "SBS", "파워FM", "FM 107.7", Source.Sbs("powerpc/powerfm", "S07"), "SBS 파워FM · 음악 · 토크", "https://programs.sbs.co.kr/radio/powerfm", "SBS Power FM"),
-        Station("sbs_love", "SBS", "러브FM", "FM 103.5", Source.Sbs("lovepc/lovefm", "S08"), "SBS 러브FM · 시사 · 생활 · 음악", "https://programs.sbs.co.kr/radio/lovefm", "SBS Love FM"),
+        Station("mbc_fm4u", "MBC", "FM4U", "FM 91.9", Source.Mbc("mfm", "FM4U"), "MBC FM4U · 음악 전문", "https://www.imbc.com/broad/radio/fm4u/", logoRes = R.drawable.iradio_mbc),
+        Station("mbc_std", "MBC", "표준FM", "FM 95.9", Source.Mbc("sfm", "FM"), "MBC 표준FM · 시사 · 교양 · 음악", "https://www.imbc.com/broad/radio/fm/", logoRes = R.drawable.iradio_mbc),
+        Station("mbc_chm", "MBC", "올댓뮤직", "", Source.Mbc("chm", "CHM"), "MBC 올댓뮤직 · 인터넷 음악 채널", "https://mini.imbc.com/", logoRes = R.drawable.iradio_mbc),
+        Station("sbs_power", "SBS", "파워FM", "FM 107.7", Source.Sbs("powerpc/powerfm", "S07"), "SBS 파워FM · 음악 · 토크", "https://programs.sbs.co.kr/radio/powerfm", logoRes = R.drawable.iradio_sbs),
+        Station("sbs_love", "SBS", "러브FM", "FM 103.5", Source.Sbs("lovepc/lovefm", "S08"), "SBS 러브FM · 시사 · 생활 · 음악", "https://programs.sbs.co.kr/radio/lovefm", logoRes = R.drawable.iradio_sbs),
         Station("cbs_music", "CBS", "음악FM", "FM 93.9", Source.Fixed("https://m-aac.cbs.co.kr/mweb_cbs939/_definst_/cbs939.stream/playlist.m3u8"),
-            "CBS 음악FM · 음악 전문 (편성 정보 없음)", "https://www.cbs.co.kr/radio/", "CBS 음악"),
+            "CBS 음악FM · 음악 전문 (편성 정보 없음)", "https://www.cbs.co.kr/radio/", logoRes = R.drawable.iradio_cbs),
         Station("cbs_std", "CBS", "표준FM", "FM 98.1", Source.Fixed("https://m-aac.cbs.co.kr/mweb_cbs981/_definst_/cbs981.stream/playlist.m3u8"),
-            "CBS 표준FM · 시사 · 교양 (편성 정보 없음)", "https://www.cbs.co.kr/radio/", "CBS 표준"),
+            "CBS 표준FM · 시사 · 교양 (편성 정보 없음)", "https://www.cbs.co.kr/radio/", logoRes = R.drawable.iradio_cbs),
         Station("ebs_fm", "EBS", "FM", "FM 104.5", Source.Fixed("https://ebsonair.ebs.co.kr/fmradiofamilypc/familypc1m/playlist.m3u8"),
-            "EBS FM · 어학 · 교육 (편성 정보 없음)", "https://home.ebs.co.kr/radio/", "EBS FM"),
+            "EBS FM · 어학 · 교육 (편성 정보 없음)", "https://home.ebs.co.kr/radio/", logoRes = R.drawable.iradio_ebs),
         Station("ytn", "YTN", "라디오", "FM 94.5", Source.Fixed("https://radiolive.ytn.co.kr/radio/_definst_/20211118_fmlive/playlist.m3u8"),
-            "YTN 라디오 · 뉴스 · 경제 (편성 정보 없음)", "https://radio.ytn.co.kr/", "YTN"),
+            "YTN 라디오 · 뉴스 · 경제 (편성 정보 없음)", "https://radio.ytn.co.kr/", logoRes = R.drawable.iradio_ytn),
         Station("tbs", "TBS", "FM", "FM 95.1", Source.Fixed("https://cdnfm.tbs.seoul.kr/tbs/_definst_/tbs_fm_web_360.smil/playlist.m3u8"),
             "TBS 교통방송 · 서울 교통 · 생활 (편성 정보 없음)", "https://tbs.seoul.kr/", "TBS FM"),
         Station("gugak", "국악방송", "", "FM 99.1", Source.Fixed("https://mgugaklive.nowcdn.co.kr/gugakradio/gugakradio.stream/playlist.m3u8"),
-            "국악방송 · 국악 · 전통 음악 (편성 정보 없음)", "https://www.igbf.kr/", "gukak"),
+            "국악방송 · 국악 · 전통 음악 (편성 정보 없음)", "https://www.igbf.kr/", logoRes = R.drawable.iradio_gugak),
         Station("febc", "극동방송", "", "FM 106.9", Source.Fixed("https://mlive2.febc.net/live/seoulfm/playlist.m3u8"),
-            "극동방송 · 기독교 · 음악 (편성 정보 없음)", "https://www.febc.net/", "FEBC Seoul"),
+            "극동방송 · 기독교 · 음악 (편성 정보 없음)", "https://www.febc.net/", logoRes = R.drawable.iradio_febc),
     )
 
     fun station(id: String?): Station? = STATIONS.firstOrNull { it.id == id }
@@ -298,8 +301,9 @@ object IRadioApi {
 
     // ---------- 로고 ----------
 
-    /** 로고 주소 (KBS 는 채널 API, 나머지는 radio-browser). 없으면 받아서 done (main 스레드 아님) */
+    /** 로고 주소 (앱에 넣어 둔 것 → KBS 는 채널 API → 나머지는 radio-browser). 없으면 받아서 done (main 스레드 아님) */
     fun logo(c: Context, s: Station, done: (String) -> Unit): String? {
+        if (s.logoRes != 0) return "android.resource://${c.packageName}/${s.logoRes}"
         logos[s.id]?.let { return it }
         val pref = c.getSharedPreferences("iradio_logo", Context.MODE_PRIVATE)
         pref.getString(s.id, null)?.let { logos[s.id] = it; return it.ifEmpty { null } }
