@@ -73,7 +73,7 @@
     <string name="set_yt_premium">로그인됨 · %1$s (Premium)</string>
     <string name="set_yt_login_desc">TV 방식 로그인: 휴대폰으로 코드를 넣습니다 · YouTube Premium 계정만</string>
     <string name="set_license">오픈소스 (GPL v3)</string>
-    <string name="set_license_desc">D-Player 는 GNU GPL v3 오픈소스입니다 · YouTube 재생에 NewPipeExtractor(GPL v3), 재생에 AndroidX Media3(Apache 2.0), 로그인 QR 코드에 ZXing(Apache 2.0) 사용\n소스: github.com/KyuYeubKim/Dolphinplayer</string>
+    <string name="set_license_desc">D-Player 는 GNU GPL v3 오픈소스입니다 · YouTube 재생에 NewPipeExtractor(GPL v3), 재생에 AndroidX Media3(Apache 2.0), 로그인 QR 코드에 ZXing(Apache 2.0) 사용</string>
     <string name="set_sp_refused_desc">차의 Spotify 앱이 목록을 열어 주지 않습니다 — 재생 · 버튼은 그대로 쓸 수 있습니다</string>
     <string name="yt_no_playlists">재생목록이 없습니다</string>
     <string name="yt_no_songs">곡이 없습니다</string>
@@ -165,7 +165,7 @@
     <string name="set_auto_update_desc">앱을 열 때 새 버전이 있는지 확인합니다</string>
     <string name="set_beta">시험판(베타) 업데이트 받기</string>
     <string name="set_beta_desc">새 기능을 먼저 써 볼 수 있는 시험판도 받습니다. 불안정할 수 있어요</string>
-    <string name="set_about_desc">BYD 돌핀용 미디어 플레이어 · github.com/KyuYeubKim/Dolphinplayer</string>
+    <string name="set_about_desc">BYD 돌핀용 미디어 플레이어</string>
     <string name="set_ticker">재생 정보 표시</string>
     <string name="set_ticker_desc">재생 중인 곡의 제목 · 가수를 반투명 띠로 띄웁니다. 다른 앱 화면 · D-Player 가 뒤에 있을 때도 보이고, 일시정지하면 숨깁니다</string>
     <string name="set_ticker_need_perm">다른 앱 위에 표시 권한이 필요합니다. 설정 → 권한 다시 설정을 먼저 해 주세요</string>

@@ -17,7 +17,7 @@ YouTube · YouTube Music 은 YouTube 웹 페이지가 아니라 앱 안의 플�
 앱은 사용자의 계정 정보와 개인정보를 개발자에게 보내지 않습니다(아래 8. 카페 닉네임은 예외). 로그인 정보는 사용자의 기기 안에만 저장됩니다.
 
 6. 오픈소스
-앱은 GNU GPL v3 오픈소스이며 YouTube 재생에 NewPipeExtractor(GPL v3)를 씁니다. 소스: https://github.com/KyuYeubKim/Dolphinplayer
+앱은 GNU GPL v3 오픈소스이며 YouTube 재생에 NewPipeExtractor(GPL v3)를 씁니다.
 
 7. 책임의 제한
 법이 허용하는 최대 범위에서, 개발자는 앱 사용 또는 사용하지 못한 것으로 생긴 직접적·간접적 손해(사고, 재산 피해, 데이터 손실, 계정 문제 등)에 대해 책임지지 않습니다.
