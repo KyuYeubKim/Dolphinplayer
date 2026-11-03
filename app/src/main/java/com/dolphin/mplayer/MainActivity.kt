@@ -42,6 +42,7 @@ import com.dolphin.mplayer.adb.AdbProvisioner
 import com.dolphin.mplayer.update.AppUpdater
 import com.dolphin.mplayer.iradio.IRadioApi
 import com.dolphin.mplayer.iradio.IRadioEngine
+import com.dolphin.mplayer.iradio.IRadioRegions
 import com.dolphin.mplayer.iradio.IRadioView
 import com.dolphin.mplayer.local.LocalEngine
 import com.dolphin.mplayer.local.VideoActivity
@@ -63,8 +64,8 @@ class MainActivity : Activity() {
         YT_GRID, YT_TABS,
         /** Spotify(차량 앱 라이브러리): 검색 · 검색어로 바로 재생 */
         SP_SEARCH, SP_PLAY_QUERY, SP_RECENT,
-        /** 인터넷 라디오: 채널 · 오늘 편성표의 프로그램 (0.78) */
-        IR_STATION, IR_PROGRAM,
+        /** 인터넷 라디오: 채널 · 오늘 편성표의 프로그램 (0.78) · 채널 편집 (0.80) */
+        IR_STATION, IR_PROGRAM, IR_EDIT,
     }
 
     private data class Row(
@@ -435,7 +436,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(12) })
         radioPresets.view.visibility = View.GONE
         IRadioEngine.init(this)
-        iradioView = IRadioView(this, images, onPick = { playIRadio(it) }, onInfo = { showIRadioInfo(it) }, onSwipe = {
+        iradioView = IRadioView(this, images, onPick = { playIRadio(it) }, onInfo = { showIRadioInfo(it) }, onEdit = { editIRadioChannels() }, onSwipe = {
             if (carUserCover) {
                 carUserCover = false
                 updateCarPanel()
@@ -726,7 +727,9 @@ class MainActivity : Activity() {
         if (StatusTicker.running) return StatusTicker.refresh(this)
         if (!hasListenerAccess()) return
         if (MediaListenerService.ensureTicker()) return YtLog.e("재생 정보 띠: 서비스는 연결돼 있었음 → 띠 시작")
-        YtLog.e("재생 정보 띠: 서비스가 연결돼 있지 않아 다시 연결 요청")
+        // 시동을 켠 뒤 서비스가 안 붙는 경우가 있어(0.79 까지 띠가 안 나옴) 화면 쪽에서 바로 띠를 시작 (0.80)
+        YtLog.e("재생 정보 띠: 서비스가 연결돼 있지 않음 → 앱에서 띠 시작 + 다시 연결 요청")
+        StatusTicker.startShared(this, "D-Player 화면")
         runCatching {
             android.service.notification.NotificationListenerService.requestRebind(
                 ComponentName(this, MediaListenerService::class.java))
@@ -1666,14 +1669,15 @@ class MainActivity : Activity() {
         else if (listMode == ListMode.IR_SCHED) showIRadioToday(keepScroll = true)
     }
 
-    /** 라이브러리: 채널 목록 (로고 · 주파수 · 지금 프로그램 · 진행자 · 시간) */
+    /** 라이브러리: 내 채널 목록 (로고 · 주파수 · 지금 프로그램 · 진행자 · 시간) + 맨 위에 채널 편집 */
     private fun showIRadioList(keepScroll: Boolean = false) {
-        val list = IRadioApi.STATIONS
+        val list = IRadioApi.mine(this)
+        val favs = IRadioApi.favorites(this)
         setHeader(getString(R.string.iradio_header_list, list.size))
         val pos = listView.firstVisiblePosition
-        setRows(list.map { s ->
+        setRows(listOf(Row(Kind.IR_EDIT, getString(R.string.iradio_edit), getString(R.string.iradio_edit_desc))) + list.map { s ->
             val now = IRadioApi.cached(s)?.now
-            Row(Kind.IR_STATION, "${s.name}  ·  ${s.freqText}",
+            Row(Kind.IR_STATION, (if (s.id in favs) "★ " else "") + "${s.name}  ·  ${s.freqText}",
                 now?.let { n -> listOfNotNull(n.title, n.dj.takeIf { it.isNotBlank() }?.let { getString(R.string.iradio_dj, it) },
                     n.timeText.takeIf { it.isNotEmpty() }).joinToString(" · ") } ?: s.about,
                 id = s.id,
@@ -1682,6 +1686,134 @@ class MainActivity : Activity() {
         }, "")
         if (keepScroll) listView.setSelection(pos) else scrollToActive()
         list.forEach { s -> IRadioApi.refreshIfStale(s) { main.post { onIRadioChanged() } } }
+    }
+
+    /**
+     * 채널 편집 (0.80): 내 채널의 즐겨찾기(★ — 맨 앞으로, 다음/이전 버튼은 즐겨찾기끼리) · 순서(▲▼) · 빼기(✕),
+     * '채널 추가'로 기본 채널 · 지역 방송을 골라 넣기. 확인을 눌러야 저장.
+     */
+    private fun editIRadioChannels() {
+        val ids = IRadioApi.mine(this).map { it.id }.toMutableList()
+        val favs = IRadioApi.favorites(this).toMutableSet()
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(4), dp(12), 0) }
+        fun tidy() { // 즐겨찾기를 앞으로 (각자 순서는 그대로)
+            val sorted = ids.filter { it in favs } + ids.filter { it !in favs }
+            ids.clear(); ids.addAll(sorted)
+        }
+        fun button(t: String, desc: Int, enabled: Boolean, color: Int, click: () -> Unit) = TextView(this).apply {
+            text = t
+            textSize = 19f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(color)
+            contentDescription = getString(desc)
+            alpha = if (enabled) 1f else 0.25f
+            setBackgroundResource(R.drawable.bg_rail_button)
+            setOnClickListener { if (enabled) click() }
+        }
+        lateinit var render: () -> Unit
+        render = {
+            list.removeAllViews()
+            if (ids.isEmpty()) list.addView(TextView(this).apply {
+                setText(R.string.iradio_edit_empty)
+                textSize = 15f
+                setTextColor(getColor(R.color.text_dim))
+                setPadding(0, dp(16), 0, dp(16))
+            })
+            ids.forEachIndexed { i, id ->
+                val s = IRadioApi.station(id) ?: return@forEachIndexed
+                val fav = id in favs
+                // ▲▼ 는 같은 묶음(즐겨찾기 / 나머지) 안에서만
+                fun neighbor(d: Int) = ids.getOrNull(i + d)?.takeIf { (it in favs) == fav }
+                list.addView(LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    addView(button(if (fav) "★" else "☆", R.string.iradio_fav, true, getColor(if (fav) R.color.accent else R.color.text_dim)) {
+                        if (fav) favs.remove(id) else favs.add(id)
+                        tidy(); render()
+                    }, LinearLayout.LayoutParams(dp(46), dp(46)))
+                    addView(ImageView(this@MainActivity).apply {
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        val url = IRadioApi.logo(this@MainActivity, s) { main.post { render() } }
+                        images.load(this, null, url?.let(Uri::parse), R.drawable.ic_logo_iradio)
+                    }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginStart = dp(8); marginEnd = dp(10) })
+                    addView(LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.VERTICAL
+                        addView(TextView(this@MainActivity).apply {
+                            text = s.name
+                            textSize = 16f
+                            maxLines = 1
+                            ellipsize = android.text.TextUtils.TruncateAt.END
+                            setTextColor(getColor(R.color.text))
+                        })
+                        addView(TextView(this@MainActivity).apply {
+                            text = s.freqText
+                            textSize = 12f
+                            setTextColor(getColor(R.color.text_dim))
+                        })
+                    }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                    listOf("▲" to -1, "▼" to 1).forEach { (t, d) ->
+                        addView(button(t, if (d < 0) R.string.sources_up else R.string.sources_down, neighbor(d) != null, getColor(R.color.accent)) {
+                            java.util.Collections.swap(ids, i, i + d); render()
+                        }, LinearLayout.LayoutParams(dp(48), dp(46)).apply { marginStart = dp(6) })
+                    }
+                    addView(button("✕", R.string.iradio_remove, true, getColor(R.color.text_dim)) {
+                        ids.remove(id); favs.remove(id); render()
+                    }, LinearLayout.LayoutParams(dp(44), dp(46)).apply { marginStart = dp(6) })
+                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)))
+            }
+            list.addView(TextView(this).apply {
+                setText(R.string.iradio_edit_reset)
+                textSize = 14f
+                gravity = android.view.Gravity.CENTER
+                setTextColor(getColor(R.color.text_dim))
+                setPadding(0, dp(14), 0, dp(14))
+                setOnClickListener {
+                    ids.clear(); ids.addAll(IRadioApi.STATIONS.map { it.id }); favs.clear(); render()
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        render()
+        val dlg = AlertDialog.Builder(this)
+            .setTitle(R.string.iradio_edit_title)
+            .setView(android.widget.ScrollView(this).apply { addView(list) })
+            .setPositiveButton(android.R.string.ok, null)
+            .setNeutralButton(R.string.iradio_add, null)
+            .setNegativeButton(R.string.close, null)
+            .show()
+        dlg.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { addIRadioChannels(ids) { render() } }
+        dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            if (ids.isEmpty()) return@setOnClickListener toast(getString(R.string.sources_need_one))
+            IRadioApi.saveMine(this, ids, favs)
+            IRadioEngine.refreshQueue()
+            YtLog.e("인터넷 라디오 채널 편집: ${ids.size}곳 (즐겨찾기 ${favs.size})")
+            onIRadioChanged()
+            dlg.dismiss()
+        }
+    }
+
+    /** 채널 추가: 지역 고르기 → 그 지역 방송을 체크 (체크를 풀면 뺌) */
+    private fun addIRadioChannels(ids: MutableList<String>, done: () -> Unit) {
+        val groups = listOf(getString(R.string.iradio_basic) to IRadioApi.STATIONS) + IRadioRegions.REGIONS.map { it.name to it.stations }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.iradio_add_title)
+            .setItems(groups.map { (name, st) -> "$name  ·  ${getString(R.string.iradio_count, st.count { it.id in ids }, st.size)}" }.toTypedArray()) { _, which ->
+                val (name, st) = groups[which]
+                val checked = BooleanArray(st.size) { st[it].id in ids }
+                AlertDialog.Builder(this)
+                    .setTitle(name)
+                    .setMultiChoiceItems(st.map { it.name }.toTypedArray(), checked) { _, i, c -> checked[i] = c }
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        st.forEachIndexed { i, s ->
+                            if (checked[i] && s.id !in ids) ids.add(s.id)
+                            if (!checked[i]) ids.remove(s.id)
+                        }
+                        done()
+                    }
+                    .setNegativeButton(R.string.close, null)
+                    .show()
+            }
+            .setNegativeButton(R.string.close, null)
+            .show()
     }
 
     /** 재생 목록: 지금 채널의 오늘 편성표 (지금 프로그램 강조) */
@@ -3302,6 +3434,7 @@ class MainActivity : Activity() {
         val c = controller
         when (row.kind) {
             Kind.IR_STATION -> IRadioApi.station(row.id)?.let { playIRadio(it) }
+            Kind.IR_EDIT -> editIRadioChannels()
             Kind.IR_PROGRAM -> IRadioEngine.station?.let { s ->
                 IRadioApi.cached(s)?.today?.getOrNull(row.queueId.toInt())?.let { showProgram(s, it) }
             }
@@ -3551,6 +3684,7 @@ class MainActivity : Activity() {
                 Kind.YT_SEARCH, Kind.SP_SEARCH -> { thumb.tag = null; thumb.setImageResource(R.drawable.ic_search) }
                 Kind.SP_PLAY_QUERY -> { thumb.tag = null; thumb.setImageResource(R.drawable.ic_play) }
                 Kind.SP_RECENT -> { thumb.tag = null; thumb.setImageResource(R.drawable.ic_timer) }
+                Kind.IR_EDIT -> { thumb.tag = null; thumb.setImageResource(R.drawable.ic_settings) }
                 Kind.YT_MYLIB -> { thumb.tag = null; thumb.setImageResource(R.drawable.ic_library_music) }
                 Kind.YT_RETRY -> { thumb.tag = null; thumb.setImageResource(R.drawable.ic_refresh) }
                 Kind.FOLDER, Kind.YT_BROWSE -> images.load(thumb, row.icon, row.iconUri, R.drawable.ic_folder)

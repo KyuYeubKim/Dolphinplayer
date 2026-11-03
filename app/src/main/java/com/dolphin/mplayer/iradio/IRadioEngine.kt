@@ -131,7 +131,7 @@ object IRadioEngine : YtService.Source {
     /** 마지막 채널 (없으면 첫 채널) */
     fun lastStation(c: Context): IRadioApi.Station {
         init(c)
-        return IRadioApi.station(prefs().getString("station", null)) ?: IRadioApi.STATIONS.first()
+        return IRadioApi.station(prefs().getString("station", null)) ?: IRadioApi.mine(c).first()
     }
 
     fun lastWasPlaying(c: Context): Boolean = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("playing", false)
@@ -157,8 +157,9 @@ object IRadioEngine : YtService.Source {
     override fun next() = step(1)
     override fun previous() = step(-1)
 
+    /** 다음/이전: 내 채널 순서대로 (즐겨찾기가 둘 이상이면 즐겨찾기만, 0.80) */
     private fun step(d: Int) {
-        val list = IRadioApi.STATIONS
+        val list = IRadioApi.stepList(app)
         val i = list.indexOfFirst { it.id == station?.id }
         play(app, list[((if (i < 0) 0 else i + d) % list.size + list.size) % list.size])
     }
@@ -275,14 +276,21 @@ object IRadioEngine : YtService.Source {
                 override fun onSkipToNext() = next()
                 override fun onSkipToPrevious() = previous()
                 override fun onSkipToQueueItem(id: Long) {
-                    IRadioApi.STATIONS.getOrNull(id.toInt())?.let { play(app, it) }
+                    IRadioApi.mine(app).getOrNull(id.toInt())?.let { play(app, it) }
                 }
             })
-            setQueue(IRadioApi.STATIONS.mapIndexed { i, s ->
-                MediaSession.QueueItem(android.media.MediaDescription.Builder().setMediaId(s.id)
-                    .setTitle(s.name).setSubtitle(s.freqText).build(), i.toLong())
-            })
         }
+        refreshQueue()
+    }
+
+    /** 세션의 재생 목록 = 내 채널 (채널 편집 뒤에도 부름) */
+    fun refreshQueue() {
+        val s = session ?: return
+        s.setQueue(IRadioApi.mine(app).mapIndexed { i, st ->
+            MediaSession.QueueItem(android.media.MediaDescription.Builder().setMediaId(st.id)
+                .setTitle(st.name).setSubtitle(st.freqText).build(), i.toLong())
+        })
+        publishState()
     }
 
     private fun publishMetadata() {
@@ -334,7 +342,7 @@ object IRadioEngine : YtService.Source {
                         PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS or
                         PlaybackState.ACTION_STOP or PlaybackState.ACTION_SKIP_TO_QUEUE_ITEM
                 )
-                .setActiveQueueItemId(IRadioApi.STATIONS.indexOfFirst { it.id == station?.id }.toLong())
+                .setActiveQueueItemId(IRadioApi.mine(app).indexOfFirst { it.id == station?.id }.toLong())
                 // 진행은 프로그램 시계라 멈춰 있어도 흐름
                 .setState(state, pos, 1f, SystemClock.elapsedRealtime())
                 .build()

@@ -25,6 +25,7 @@ class IRadioView(
     private val images: ImageLoader,
     private val onPick: (IRadioApi.Station) -> Unit,
     private val onInfo: (IRadioApi.Station) -> Unit,
+    private val onEdit: () -> Unit,
     onSwipe: () -> Unit,
 ) {
     private val d = a.resources.displayMetrics.density
@@ -47,16 +48,31 @@ class IRadioView(
             setTextColor(a.getColor(R.color.accent))
             setPadding(dp(2), 0, 0, dp(6))
         })
-        IRadioApi.STATIONS.chunked(2).forEach { pair ->
+        val mine = IRadioApi.mine(a)
+        val favs = IRadioApi.favorites(a)
+        mine.chunked(2).forEach { pair ->
             val row = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL }
             for (i in 0 until 2) {
-                val cell = pair.getOrNull(i)?.let { tile(it, it.id == cur?.id) } ?: View(a)
+                val cell = pair.getOrNull(i)?.let { tile(it, it.id == cur?.id, it.id in favs) } ?: View(a)
                 row.addView(cell, LinearLayout.LayoutParams(0, dp(62), 1f).apply { marginStart = if (i == 0) 0 else dp(8) })
             }
             box.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         }
+        // 채널 편집 (즐겨찾기 · 순서 · 숨기기 · 지역 방송 추가, 0.80)
+        box.addView(TextView(a).apply {
+            setText(R.string.iradio_edit)
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(a.getColor(R.color.accent))
+            background = bg(false)
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                onEdit()
+            }
+        }, LinearLayout.LayoutParams(-1, dp(52)).apply { bottomMargin = dp(8) })
         // 화면에 보이는 채널의 지금 프로그램을 받아 둠 (받으면 다시 그림)
-        IRadioApi.STATIONS.forEach { s -> IRadioApi.refreshIfStale(s) { later() } }
+        mine.forEach { s -> IRadioApi.refreshIfStale(s) { later() } }
     }
 
     private val again = Runnable { render() }
@@ -139,7 +155,7 @@ class IRadioView(
         }
     }
 
-    private fun tile(s: IRadioApi.Station, on: Boolean): View = LinearLayout(a).apply {
+    private fun tile(s: IRadioApi.Station, on: Boolean, fav: Boolean): View = LinearLayout(a).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         background = bg(on)
@@ -150,7 +166,7 @@ class IRadioView(
             addView(LinearLayout(a).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                addView(label(s.name, 14f, if (on) a.getColor(R.color.accent) else text, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
+                addView(label((if (fav) "★ " else "") + s.name, 14f, if (on) a.getColor(R.color.accent) else text, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
                 addView(label(s.freqText.removePrefix("FM ").removePrefix("AM "), 11f, dim).apply { setPadding(dp(4), 0, 0, 0) })
             })
             val now = IRadioApi.cached(s)?.now

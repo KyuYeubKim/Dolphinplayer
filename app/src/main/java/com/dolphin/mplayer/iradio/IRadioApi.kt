@@ -27,13 +27,18 @@ import java.util.concurrent.Executors
 object IRadioApi {
 
     sealed class Source {
-        /** KBS 채널 코드 (콩): 21=1라디오 22=해피FM 23=3라디오 24=클래식FM 25=쿨FM 26=한민족방송 */
-        class Kbs(val code: String) : Source()
+        /** KBS 채널 코드 (콩): 21=1라디오 22=해피FM 23=3라디오 24=클래식FM 25=쿨FM 26=한민족방송, local = 지역국 (00 본사 · 10 부산 …, 0.80) */
+        class Kbs(val code: String, val local: String = "00") : Source() {
+            /** 채널 API 의 코드: 본사는 21, 지역국은 10_21 */
+            val api: String get() = if (local == "00") code else "${local}_$code"
+        }
         /** MBC mini 채널 (sfm · mfm · chm), sched = 편성표 sType (FM=표준FM · FM4U · CHM=올댓뮤직, 없으면 편성 정보 없음) */
         class Mbc(val channel: String, val sched: String?) : Source()
         /** SBS 고릴라 스트림 경로 (powerpc/powerfm), onair = 지금 프로그램 채널 id (S07) */
         class Sbs(val path: String, val onair: String) : Source()
         class Fixed(val url: String) : Source()
+        /** 부산MBC (AM=표준FM · FM=FM4U): 주소 안의 날짜 표시가 매일 바뀜 (0.80) */
+        class BusanMbc(val kind: String) : Source()
     }
 
     data class Station(
@@ -50,9 +55,11 @@ object IRadioApi {
         val logoQuery: String = "",
         /** 앱에 넣어 둔 로고 (radio-browser 에 없거나 작게 보이는 방송, 0.79) */
         val logoRes: Int = 0,
+        /** 지역 방송이면 지역 이름 (주파수 대신 보임, 0.80) */
+        val region: String = "",
     ) {
         val name: String get() = "$broadcaster $channel".trim()
-        val freqText: String get() = if (freq.isEmpty()) "인터넷" else freq
+        val freqText: String get() = freq.ifEmpty { region.ifEmpty { "인터넷" } }
     }
 
     val STATIONS = listOf(
@@ -83,7 +90,40 @@ object IRadioApi {
             "극동방송 · 기독교 · 음악 (편성 정보 없음)", "https://www.febc.net/", logoRes = R.drawable.iradio_febc),
     )
 
-    fun station(id: String?): Station? = STATIONS.firstOrNull { it.id == id }
+    /** 기본 채널 + 지역 방송 전부 (채널 편집에서 고르는 곳) */
+    val ALL: List<Station> by lazy { STATIONS + IRadioRegions.REGIONS.flatMap { it.stations } }
+    private val byId: Map<String, Station> by lazy { ALL.associateBy { it.id } }
+
+    fun station(id: String?): Station? = id?.let { byId[it] }
+
+    // ---------- 내 채널 (0.80) ----------
+
+    private fun myPrefs(c: Context) = c.getSharedPreferences("iradio", Context.MODE_PRIVATE)
+
+    /** 화면에 보이는 채널 (순서대로, 즐겨찾기가 맨 앞). 처음엔 기본 18곳 */
+    fun mine(c: Context): List<Station> {
+        val saved = myPrefs(c).getString("mine", null) ?: return STATIONS
+        return saved.split(',').mapNotNull { station(it) }.ifEmpty { STATIONS }
+    }
+
+    fun favorites(c: Context): Set<String> =
+        myPrefs(c).getString("favorites", null)?.split(',')?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
+
+    /** 내 채널 저장 — 즐겨찾기를 앞으로 모아서 */
+    fun saveMine(c: Context, ids: List<String>, favs: Set<String>) {
+        val ordered = ids.filter { it in favs } + ids.filter { it !in favs }
+        myPrefs(c).edit().putString("mine", ordered.joinToString(","))
+            .putString("favorites", favs.filter { it in ids }.joinToString(",")).apply()
+    }
+
+    fun resetMine(c: Context) = myPrefs(c).edit().remove("mine").remove("favorites").apply()
+
+    /** 다음/이전 버튼이 도는 채널: 즐겨찾기가 둘 이상이면 즐겨찾기만, 아니면 내 채널 전부 */
+    fun stepList(c: Context): List<Station> {
+        val all = mine(c)
+        val favs = favorites(c)
+        return all.filter { it.id in favs }.takeIf { it.size >= 2 } ?: all
+    }
 
     /** 프로그램 하나. start · end = 그날 0시부터 분 (자정을 넘기면 1440 이상), 모르면 -1 */
     data class Program(
@@ -141,11 +181,11 @@ object IRadioApi {
     /** 재생 주소. KBS · MBC · SBS 는 매번 새로 받음 (서명 · 토큰이 몇 시간 뒤 만료) */
     fun streamUrl(s: Station): String = when (val src = s.source) {
         is Source.Kbs -> {
-            val o = JSONObject(get("https://cfpwwwapi.kbs.co.kr/api/v1/landing/live/channel_code/${src.code}"))
+            val o = JSONObject(get("https://cfpwwwapi.kbs.co.kr/api/v1/landing/live/channel_code/${src.api}"))
             o.optJSONObject("channelMaster")?.optString("image_path_channel_logo")?.takeIf { it.isNotEmpty() }?.let { logos[s.id] = it }
             val items = o.optJSONArray("channel_item") ?: JSONArray()
             (0 until items.length()).map { items.getJSONObject(it) }
-                .firstOrNull { it.optString("media_type") == "radio" }?.optString("service_url")
+                .firstOrNull { it.optString("media_type") == "radio" || it.optString("media_type") == "local" }?.optString("service_url")
                 ?.takeIf { it.startsWith("http") } ?: throw java.io.IOException("KBS 주소 없음")
         }
         is Source.Mbc -> get("https://sminiplay.imbc.com/aacplay.ashx?agent=webapp&channel=${src.channel}").trim()
@@ -153,7 +193,12 @@ object IRadioApi {
         is Source.Sbs -> get("https://apis.sbs.co.kr/play-api/1.0/livestream/${src.path}?protocol=hls&ssl=Y").trim()
             .takeIf { it.startsWith("http") } ?: throw java.io.IOException("SBS 주소 없음")
         is Source.Fixed -> src.url
+        is Source.BusanMbc -> "https://brook.bsmbc.com/live/BusanMBC_${src.kind}_onairstream.${busanDay()}/playlist.m3u8"
     }
+
+    /** 부산MBC 주소의 날짜 표시: 한국 날짜 yyMMdd 의 숫자를 글자로 (0→q 1→h …) */
+    private fun busanDay(): String =
+        SimpleDateFormat("yyMMdd", Locale.KOREA).apply { timeZone = KST }.format(java.util.Date()).map { "qhsagbjcpd"[it - '0'] }.joinToString("")
 
     // ---------- 방송 정보 ----------
 
@@ -169,7 +214,7 @@ object IRadioApi {
     }
 
     /** 편성 정보 API 가 있는 방송인지 */
-    fun hasInfo(s: Station) = !(s.source is Source.Fixed || (s.source is Source.Mbc && s.source.sched == null))
+    fun hasInfo(s: Station) = s.source is Source.Kbs || s.source is Source.Sbs || (s.source is Source.Mbc && s.source.sched != null)
 
     /** 정보가 오래됐을 때만 새로 받아 done (화면 그리기용 — 새것이면 아무것도 안 함, 다시 그리기가 돌지 않게) */
     fun refreshIfStale(s: Station, done: (Info) -> Unit) {
@@ -184,10 +229,10 @@ object IRadioApi {
         io.execute {
             try {
                 val info = when (val src = s.source) {
-                    is Source.Kbs -> kbs(src.code)
+                    is Source.Kbs -> kbs(src.code, src.local)
                     is Source.Mbc -> mbc(src.sched!!)
                     is Source.Sbs -> sbs(src.onair)
-                    is Source.Fixed -> null
+                    is Source.Fixed, is Source.BusanMbc -> null
                 } ?: return@execute
                 infos[s.id] = info
                 done(info)
@@ -218,9 +263,9 @@ object IRadioApi {
         return Info(now, sorted, System.currentTimeMillis())
     }
 
-    private fun kbs(code: String): Info {
+    private fun kbs(code: String, local: String): Info {
         val day = SimpleDateFormat("yyyyMMdd", Locale.KOREA).apply { timeZone = KST }.format(java.util.Date())
-        val arr = JSONArray(get("https://static.api.kbs.co.kr/mediafactory/v1/schedule/weekly?rtype=json&local_station_code=00" +
+        val arr = JSONArray(get("https://static.api.kbs.co.kr/mediafactory/v1/schedule/weekly?rtype=json&local_station_code=$local" +
             "&channel_code=$code&program_planned_date_from=$day&program_planned_date_to=$day"))
         val list = ArrayList<Program>()
         var lastCode = ""
@@ -306,12 +351,12 @@ object IRadioApi {
         if (s.logoRes != 0) return "android.resource://${c.packageName}/${s.logoRes}"
         logos[s.id]?.let { return it }
         val pref = c.getSharedPreferences("iradio_logo", Context.MODE_PRIVATE)
-        pref.getString(s.id, null)?.let { logos[s.id] = it; return it.ifEmpty { null } }
+        pref.getString(s.id, null)?.let { logos[s.id] = it.ifEmpty { badge(c, s) }; return logos[s.id] }
         if (failedRecently("logo:" + s.id) || !loading.add("logo:" + s.id)) return null
         val app = c.applicationContext
         if (s.source is Source.Kbs) io.execute {
             runCatching {
-                JSONObject(get("https://cfpwwwapi.kbs.co.kr/api/v1/landing/live/channel_code/${s.source.code}"))
+                JSONObject(get("https://cfpwwwapi.kbs.co.kr/api/v1/landing/live/channel_code/${s.source.api}"))
                     .optJSONObject("channelMaster")?.optString("image_path_channel_logo").orEmpty()
             }.onSuccess { url ->
                 logos[s.id] = url
@@ -322,12 +367,51 @@ object IRadioApi {
         } else if (s.logoQuery.isNotEmpty()) {
             RadioInfo.fetchLogo(app, s.logoQuery) { l ->
                 val url = l.favicon.replaceFirst("http://", "https://")
-                logos[s.id] = url
+                logos[s.id] = url.ifEmpty { badge(app, s) }
                 pref.edit().putString(s.id, url).apply()
                 loading.remove("logo:" + s.id)
-                if (url.isNotEmpty()) done(url)
+                done(logos[s.id]!!)
             }
+        } else {
+            loading.remove("logo:" + s.id)
+            return badge(c, s).also { logos[s.id] = it }
         }
         return null
+    }
+
+    private val BADGE_COLORS = intArrayOf(
+        0xFF1E5AA8.toInt(), 0xFF0F8A6B.toInt(), 0xFFB5432E.toInt(), 0xFF6A3FA0.toInt(),
+        0xFF2D7D9A.toInt(), 0xFFAA6A12.toInt(), 0xFF3B4C63.toInt(), 0xFF8A2D5C.toInt(),
+    )
+
+    /** 로고를 구할 수 없는 방송: 방송사 이름을 적은 정사각형 그림 (캐시 폴더에 한 번 만들어 둠, 0.80) */
+    private fun badge(c: Context, s: Station): String {
+        val f = java.io.File(c.cacheDir, "iradio_badge/${s.id}.png")
+        if (!f.exists()) runCatching {
+            f.parentFile?.mkdirs()
+            val n = 180
+            val bmp = android.graphics.Bitmap.createBitmap(n, n, android.graphics.Bitmap.Config.ARGB_8888)
+            val cv = android.graphics.Canvas(bmp)
+            cv.drawColor(BADGE_COLORS[(s.broadcaster.hashCode() and 0x7fffffff) % BADGE_COLORS.size])
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.WHITE
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                textAlign = android.graphics.Paint.Align.CENTER
+            }
+            fun fit(t: String, size: Float) {
+                paint.textSize = size
+                while (paint.measureText(t) > n - 24 && paint.textSize > 16f) paint.textSize -= 2f
+            }
+            val sub = s.channel.ifEmpty { s.region }
+            fit(s.broadcaster, 60f)
+            cv.drawText(s.broadcaster, n / 2f, if (sub.isEmpty()) n / 2f + paint.textSize / 3 else n / 2f, paint)
+            if (sub.isNotEmpty()) {
+                paint.typeface = android.graphics.Typeface.DEFAULT
+                fit(sub, 28f)
+                cv.drawText(sub, n / 2f, n / 2f + 40f, paint)
+            }
+            f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        return android.net.Uri.fromFile(f).toString()
     }
 }

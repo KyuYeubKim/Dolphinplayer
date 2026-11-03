@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  기본은 https 만 (Android 기본값 그대로).
+  인터넷 라디오(0.80)의 지역 방송 중 http 로만 열리는 스트림 주소만 따로 허용 — iradio/IRadioRegions.kt 의 http:// 주소와 같게 유지.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">stream.yubinet.com</domain>
+        <domain includeSubdomains="false">live.wjmbc.co.kr</domain>
+        <domain includeSubdomains="false">123.254.72.24</domain>
+        <domain includeSubdomains="false">203.251.91.122</domain>
+        <domain includeSubdomains="false">61.85.197.53</domain>
+        <domain includeSubdomains="false">61.82.49.4</domain>
+        <domain includeSubdomains="false">123.140.197.22</domain>
+        <domain includeSubdomains="false">onair1.cpbc.co.kr</domain>
+        <domain includeSubdomains="false">live.dgcpbc.co.kr</domain>
+    </domain-config>
+</network-security-config>

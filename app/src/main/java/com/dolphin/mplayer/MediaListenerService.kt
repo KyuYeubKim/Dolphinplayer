@@ -19,8 +19,6 @@ class MediaListenerService : NotificationListenerService() {
         }
     }
 
-    private var ticker: StatusTicker? = null
-
     override fun onListenerConnected() {
         connected = this
         startTicker()
@@ -30,19 +28,24 @@ class MediaListenerService : NotificationListenerService() {
     private fun startTicker() {
         val p = getSharedPreferences("player", MODE_PRIVATE)
         val agreed = p.getLong("agreed_code", 0L) > 0L || p.getBoolean("terms_accepted_v1", false) // MainActivity.AGREED_CODE · TERMS_KEY
-        if (agreed && ticker == null) ticker = StatusTicker(this).also { it.start() }
+        if (agreed) StatusTicker.startShared(this, "알림 접근 서비스")
     }
 
+    // 연결이 끊겨도 띠는 그대로 (권한이 남아 있으면 세션은 계속 읽힘). 권한을 끄면 띠도 끔 (0.80)
     override fun onListenerDisconnected() {
         if (connected === this) connected = null
-        ticker?.stop()
-        ticker = null
+        if (!hasAccess()) StatusTicker.stopShared()
     }
 
     override fun onDestroy() {
         if (connected === this) connected = null
-        ticker?.stop()
-        ticker = null
+        if (!hasAccess()) StatusTicker.stopShared()
         super.onDestroy()
+    }
+
+    private fun hasAccess(): Boolean {
+        val me = android.content.ComponentName(this, MediaListenerService::class.java)
+        val enabled = android.provider.Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: return false
+        return enabled.split(':').any { android.content.ComponentName.unflattenFromString(it) == me }
     }
 }

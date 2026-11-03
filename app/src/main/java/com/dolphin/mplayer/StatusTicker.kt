@@ -65,7 +65,26 @@ class StatusTicker(private val ctx: Context) {
 
         fun diag(c: Context) = "재생 정보 표시: 설정=${if (mode(c) == Mode.OFF) "꺼짐" else "켜짐"} · " +
             "다른 앱 위 권한=${if (Settings.canDrawOverlays(c)) "있음" else "없음"} · " +
-            "띠 서비스=${if (running) "돌고 있음" else "안 돎"} · 마지막=$lastState"
+            "띠 서비스=${if (running) "돌고 있음 ($owner)" else "안 돎"} · 마지막=$lastState"
+
+        /**
+         * 띠는 앱 전체에 하나 (0.80). 알림 접근 서비스가 연결되면 거기서 시작하지만, 차는 시동을 켤 때 서비스를
+         * 다시 붙여 주지 않을 때가 있어(다시 연결 요청도 안 먹힘) D-Player 화면이 열릴 때도 여기서 시작한다.
+         * 재생 세션 읽기는 서비스가 붙어 있지 않아도 '알림 접근' 권한만 있으면 된다. main 스레드에서 부를 것.
+         */
+        private var shared: StatusTicker? = null
+        private var owner = ""
+
+        fun startShared(c: Context, by: String) {
+            if (shared != null) return
+            owner = by
+            shared = StatusTicker(c.applicationContext).also { it.start() }
+        }
+
+        fun stopShared() {
+            shared?.stop()
+            shared = null
+        }
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -95,7 +114,7 @@ class StatusTicker(private val ctx: Context) {
         runCatching {
             sessions.addOnActiveSessionsChangedListener(sessionsListener, component, main)
             watch(sessions.getActiveSessions(component))
-        }
+        }.onFailure { YtLog.e("재생 정보 띠: 재생 세션을 못 읽음 ${it.javaClass.simpleName}: ${it.message}") }
         render()
     }
 

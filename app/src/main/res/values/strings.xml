@@ -257,4 +257,15 @@
     <string name="iradio_open_home">홈페이지 열기</string>
     <string name="iradio_play">이 방송 듣기</string>
     <string name="iradio_on_now">지금 방송 중</string>
+    <string name="iradio_edit">✎ 채널 편집 · 지역 방송 추가</string>
+    <string name="iradio_edit_desc">즐겨찾기(★) · 순서 · 빼기 · 부산 · 대구 · 광주 등 지역 방송</string>
+    <string name="iradio_edit_title">인터넷 라디오 채널 (★ 즐겨찾기는 맨 앞 · 다음/이전 버튼은 즐겨찾기끼리)</string>
+    <string name="iradio_edit_empty">채널이 없어요. 아래 \'채널 추가\'로 골라 주세요</string>
+    <string name="iradio_edit_reset">처음 채널로 되돌리기</string>
+    <string name="iradio_fav">즐겨찾기</string>
+    <string name="iradio_remove">빼기</string>
+    <string name="iradio_add">+ 채널 추가</string>
+    <string name="iradio_add_title">채널 추가 (지역 고르기)</string>
+    <string name="iradio_basic">기본 채널 (KBS · MBC · SBS · CBS …)</string>
+    <string name="iradio_count">%1$d / %2$d곳</string>
 </resources>
