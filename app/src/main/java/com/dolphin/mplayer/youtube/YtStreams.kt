@@ -78,11 +78,23 @@ object YtStreams {
         return s
     }
 
-    /** 영상 (화면용 영상 + 소리). maxHeight 이하 AVC(하드웨어 디코딩) — 없으면 소리 포함 360p */
+    /** 마지막으로 받은 영상 정보 (화질을 바꿀 때 다시 받지 않게, 0.81) */
+    private var lastInfo: Triple<String, StreamInfo, Long>? = null
+
+    private fun videoInfo(videoId: String): StreamInfo {
+        synchronized(this) {
+            lastInfo?.let { (id, info, at) -> if (id == videoId && SystemClock.elapsedRealtime() - at < 30 * 60_000L) return info }
+        }
+        val info = StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=$videoId")
+        synchronized(this) { lastInfo = Triple(videoId, info, SystemClock.elapsedRealtime()) }
+        return info
+    }
+
+    /** 영상 (화면용 영상 + 소리). maxHeight 이하 중 가장 높은 AVC(하드웨어 디코딩) — 없으면 소리 포함 합본 */
     fun video(videoId: String, maxHeight: Int): Stream {
         init()
         val t0 = SystemClock.elapsedRealtime()
-        val info = StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=$videoId")
+        val info = videoInfo(videoId)
         fun height(r: String) = r.substringBefore('p').toIntOrNull() ?: 0
         // 라이브 방송은 HLS (조각 파일 목록) 하나로
         if ((info.streamType == StreamType.LIVE_STREAM || info.streamType == StreamType.AUDIO_LIVE_STREAM) && info.hlsUrl.isNotEmpty()) {
@@ -92,7 +104,7 @@ object YtStreams {
         val vo = info.videoOnlyStreams.filter {
             it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && it.isUrl && it.format == MediaFormat.MPEG_4 &&
                 it.codec?.startsWith("avc") != false && height(it.resolution) in 1..maxHeight
-        }.maxByOrNull { height(it.resolution) }
+        }.maxWithOrNull(compareBy({ height(it.resolution) }, { -it.fps })) // 같은 화질이면 30fps 쪽 (차 부하)
         val audio = info.audioStreams.filter {
             it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && it.isUrl && it.format == MediaFormat.M4A &&
                 (it.audioTrackType == null || it.audioTrackType == AudioTrackType.ORIGINAL)
@@ -100,11 +112,12 @@ object YtStreams {
         val s = if (vo != null && audio != null) {
             Stream(audio.content, audio.itag, "M4A", audio.averageBitrate, expiry(vo.content), info.duration, vo.content, vo.resolution)
         } else {
-            val muxed = info.videoStreams.filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && it.isUrl }
-                .maxByOrNull { height(it.resolution) } ?: throw IllegalStateException("영상 파일 없음")
+            val all = info.videoStreams.filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && it.isUrl }
+            val muxed = all.filter { height(it.resolution) in 1..maxHeight }.maxByOrNull { height(it.resolution) }
+                ?: all.minByOrNull { height(it.resolution) } ?: throw IllegalStateException("영상 파일 없음")
             Stream(muxed.content, muxed.itag, muxed.format?.name ?: "?", 0, expiry(muxed.content), info.duration, null, muxed.resolution)
         }
-        YtLog.e("영상 주소 받음 $videoId: ${s.videoLabel} ${if (s.videoUrl != null) "영상+소리" else "합본"}, ${SystemClock.elapsedRealtime() - t0}ms")
+        YtLog.e("영상 주소 받음 $videoId: ${s.videoLabel} ${if (s.videoUrl != null) "영상+소리" else "합본"} (상한 ${maxHeight}p), ${SystemClock.elapsedRealtime() - t0}ms")
         return s
     }
 

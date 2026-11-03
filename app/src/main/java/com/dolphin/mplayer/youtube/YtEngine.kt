@@ -629,8 +629,17 @@ object YtEngine : YtService.Source {
 
     // ---------- YouTube 영상 ----------
 
-    /** 영상 화질 상한 (차 부하를 생각해 480p) */
-    private const val VIDEO_MAX_HEIGHT = 480
+    /**
+     * 영상 화질 (0.81): 기본 360p (0.80 까지는 480p 고정). 영상 화면의 ⚙ 에서 바꾸면 기억해 두고 다음 영상에도 씀.
+     * 높은 화질은 데이터 · 차 부하가 커서 720p 까지만.
+     */
+    private val VIDEO_QUALITIES = listOf(720, 480, 360, 240, 144)
+    private const val VIDEO_DEFAULT_HEIGHT = 360
+
+    fun videoQuality(c: Context) = prefs(c).getInt("yt_video_height", VIDEO_DEFAULT_HEIGHT).takeIf { it in VIDEO_QUALITIES } ?: VIDEO_DEFAULT_HEIGHT
+
+    /** 지금 나오는 영상의 실제 화질 글자 (360p · 라이브 …) */
+    private var videoLabel = ""
 
     /** 영상 재생: 전체화면을 먼저 열고, 영상 주소는 뒤에서 받아 바로 재생 */
     fun playVideo(context: Context, videoId: String, title: String, subtitle: String, thumb: String) {
@@ -643,16 +652,40 @@ object YtEngine : YtService.Source {
         val p = ensureVideo()
         p.stop()
         p.clearMediaItems()
+        videoLabel = ""
         publishMetadata(); publishState()
         context.startActivity(Intent(context, VideoActivity::class.java).putExtra(VideoActivity.EXTRA_SOURCE, VideoActivity.SOURCE_YT)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK.takeIf { context !is android.app.Activity } ?: 0))
-        val t0 = SystemClock.elapsedRealtime()
         YtLog.e("영상 재생 요청 $videoId '$title'")
+        loadVideo(t, 0L, play = true)
+    }
+
+    /** 화질을 바꾸면 지금 보던 곳에서 새 화질로 이어서 (새 주소를 받는 동안은 지금 화질로 계속 나옴) */
+    fun setVideoQuality(height: Int) {
+        if (height !in VIDEO_QUALITIES) return
+        prefs(app).edit().putInt("yt_video_height", height).apply()
+        val t = videoTrack ?: return
+        val p = video ?: return
+        YtLog.e("영상 화질 바꿈 → ${height}p (${p.currentPosition / 1000}초에서)")
+        loadVideo(t, p.currentPosition, play = p.playWhenReady)
+    }
+
+    /** 화질을 빨리 여러 번 바꿔도 마지막 것만 쓰게 */
+    private var videoLoadGen = 0
+
+    private fun loadVideo(t: Track, startMs: Long, play: Boolean) {
+        val p = ensureVideo()
+        val gen = ++videoLoadGen
+        val videoId = t.videoId
+        val maxHeight = videoQuality(app)
+        // 라이브(HLS)는 ExoPlayer 가 화질을 고르므로 여기서 상한을 건다
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setMaxVideoSize(Int.MAX_VALUE, maxHeight).build()
+        val t0 = SystemClock.elapsedRealtime()
         api.execute {
-            val s = runCatching { YtStreams.video(videoId, VIDEO_MAX_HEIGHT) }
+            val s = runCatching { YtStreams.video(videoId, maxHeight) }
                 .onFailure { YtLog.e("영상 주소 실패 $videoId: ${why(it)}") }.getOrNull()
             main.post {
-                if (videoTrack !== t) return@post
+                if (videoTrack !== t || gen != videoLoadGen) return@post
                 if (s == null) return@post emit(JSONObject().put("type", "error").put("cmd", "play").put("message", app.getString(R.string.yt_video_failed)))
                 val http = DefaultHttpDataSource.Factory().setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0")
                 val f = ProgressiveMediaSource.Factory(http)
@@ -662,10 +695,11 @@ object YtEngine : YtService.Source {
                         f.createMediaSource(MediaItem.fromUri(s.videoUrl)), f.createMediaSource(MediaItem.fromUri(s.url)))
                     else -> f.createMediaSource(MediaItem.fromUri(s.url))
                 }
-                p.setMediaSource(src)
+                videoLabel = s.videoLabel
+                if (s.format == "HLS" || startMs <= 0) p.setMediaSource(src) else p.setMediaSource(src, startMs)
                 p.prepare()
-                p.play()
-                YtLog.e("영상 재생 시작 준비 ${SystemClock.elapsedRealtime() - t0}ms (${s.videoLabel})")
+                if (play) p.play()
+                YtLog.e("영상 재생 시작 준비 ${SystemClock.elapsedRealtime() - t0}ms (${s.videoLabel}, 상한 ${maxHeight}p)")
             }
         }
     }
@@ -716,6 +750,15 @@ object YtEngine : YtService.Source {
         override fun position() = video?.currentPosition ?: 0
         override fun duration() = video?.duration?.takeIf { it != C.TIME_UNSET } ?: 0
         override fun title() = videoTrack?.title.orEmpty()
+        override fun subtitle() = videoTrack?.artist.orEmpty()
+        override fun buffered() = video?.bufferedPosition ?: 0
+        override fun ended() = video?.playbackState == Player.STATE_ENDED
+        override fun live() = videoLabel == "라이브"
+        override fun qualities() = VIDEO_QUALITIES
+        override fun quality() = videoQuality(app)
+        override fun defaultQuality() = VIDEO_DEFAULT_HEIGHT
+        override fun qualityLabel() = videoLabel
+        override fun setQuality(height: Int) = setVideoQuality(height)
         override fun loading() = video?.playbackState == Player.STATE_BUFFERING || video?.mediaItemCount == 0
         override fun videoAspect(): Float {
             val v = video?.videoSize ?: return 0f

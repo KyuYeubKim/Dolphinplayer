@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- YouTube 처럼 빨간 재생 막대 (0.81): 바탕 · 받아 둔 곳 · 재생한 곳 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape><corners android:radius="2dp" /><solid android:color="#4DFFFFFF" /></shape>
+    </item>
+    <item android:id="@android:id/secondaryProgress">
+        <clip><shape><corners android:radius="2dp" /><solid android:color="#99FFFFFF" /></shape></clip>
+    </item>
+    <item android:id="@android:id/progress">
+        <clip><shape><corners android:radius="2dp" /><solid android:color="#FFFF0033" /></shape></clip>
+    </item>
+</layer-list>

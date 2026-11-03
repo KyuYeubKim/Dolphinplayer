@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 영상 전체화면 (0.81 부터 YouTube 앱처럼): 화면을 누르면 어두워지며 가운데 재생 버튼 · 아래 빨간 막대,
+     양옆을 두 번 누르면 10초씩 이동, ⚙ 로 화질 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/videoRoot"
     android:layout_width="match_parent"
@@ -11,112 +13,246 @@
         android:layout_height="match_parent"
         android:layout_gravity="center" />
 
-    <!-- YouTube 영상을 받는 동안 (0.66) -->
-    <ProgressBar
-        android:id="@+id/videoLoading"
-        android:layout_width="64dp"
-        android:layout_height="64dp"
-        android:layout_gravity="center"
-        android:visibility="gone" />
-
     <!-- 화면을 누르면 나오는 조작 버튼 -->
     <FrameLayout
         android:id="@+id/videoControls"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#73000000" />
+
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="64dp"
-            android:background="#99000000"
+            android:layout_height="wrap_content"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="8dp">
 
             <ImageButton
                 android:id="@+id/videoBack"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:layout_marginStart="4dp"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
                 android:background="@drawable/bg_round_button"
                 android:contentDescription="@string/close"
-                android:padding="14dp"
+                android:padding="12dp"
                 android:scaleType="fitCenter"
-                android:src="@drawable/ic_back" />
+                android:src="@drawable/ic_expand_more" />
 
-            <TextView
-                android:id="@+id/videoTitle"
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:ellipsize="end"
-                android:paddingStart="8dp"
-                android:singleLine="true"
-                android:textColor="@color/text"
-                android:textSize="20sp"
-                android:textStyle="bold" />
+                android:orientation="vertical"
+                android:paddingStart="8dp">
+
+                <TextView
+                    android:id="@+id/videoTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="@color/text"
+                    android:textSize="22sp" />
+
+                <TextView
+                    android:id="@+id/videoSub"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="16sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/videoSettings"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:background="@drawable/bg_round_button"
+                android:contentDescription="@string/video_quality"
+                android:padding="16dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_settings"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:id="@+id/videoBack10"
+                android:layout_width="96dp"
+                android:layout_height="96dp"
+                android:background="@drawable/bg_round_button"
+                android:contentDescription="@string/video_back10">
+
+                <ImageView
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_gravity="center"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_replay" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginTop="4dp"
+                    android:text="10"
+                    android:textColor="@color/text"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
+
+            <ImageButton
+                android:id="@+id/videoPlay"
+                android:layout_width="104dp"
+                android:layout_height="104dp"
+                android:layout_marginHorizontal="72dp"
+                android:background="@drawable/bg_yt_center"
+                android:contentDescription="@string/cd_play"
+                android:padding="24dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_pause" />
+
+            <FrameLayout
+                android:id="@+id/videoFwd10"
+                android:layout_width="96dp"
+                android:layout_height="96dp"
+                android:background="@drawable/bg_round_button"
+                android:contentDescription="@string/video_fwd10">
+
+                <ImageView
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_gravity="center"
+                    android:importantForAccessibility="no"
+                    android:scaleX="-1"
+                    android:src="@drawable/ic_replay" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginTop="4dp"
+                    android:text="10"
+                    android:textColor="@color/text"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom"
-            android:background="#99000000"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp">
+            android:paddingBottom="8dp">
 
-            <TextView
-                android:id="@+id/videoBack10"
-                android:layout_width="64dp"
-                android:layout_height="56dp"
-                android:background="@drawable/bg_round_button"
-                android:gravity="center"
-                android:text="-10s"
-                android:textColor="@color/text"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="8dp">
 
-            <ImageButton
-                android:id="@+id/videoPlay"
-                android:layout_width="64dp"
-                android:layout_height="64dp"
-                android:layout_marginHorizontal="8dp"
-                android:background="@drawable/bg_play"
-                android:contentDescription="@string/cd_play"
-                android:padding="16dp"
-                android:scaleType="fitCenter"
-                android:src="@drawable/ic_play"
-                android:tint="#000000" />
+                <TextView
+                    android:id="@+id/videoTime"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textColor="@color/text"
+                    android:textSize="17sp" />
 
-            <TextView
-                android:id="@+id/videoFwd10"
-                android:layout_width="64dp"
-                android:layout_height="56dp"
-                android:background="@drawable/bg_round_button"
-                android:gravity="center"
-                android:text="+10s"
-                android:textColor="@color/text"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/videoQuality"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:background="@drawable/bg_yt_row"
+                    android:gravity="center"
+                    android:paddingHorizontal="14dp"
+                    android:textColor="@color/text"
+                    android:textSize="17sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+            </LinearLayout>
 
             <SeekBar
                 android:id="@+id/videoSeek"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_marginStart="12dp"
-                android:layout_weight="1"
-                android:progressBackgroundTint="@color/surface2"
-                android:progressTint="@color/accent"
-                android:thumbTint="@color/accent" />
-
-            <TextView
-                android:id="@+id/videoTime"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:textColor="@color/text"
-                android:textSize="16sp" />
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:maxHeight="4dp"
+                android:minHeight="4dp"
+                android:progressDrawable="@drawable/yt_seek_progress"
+                android:splitTrack="false"
+                android:thumb="@drawable/yt_seek_thumb" />
         </LinearLayout>
+    </FrameLayout>
+
+    <!-- 양옆 두 번 누르기 (10초 이동) 표시 -->
+    <TextView
+        android:id="@+id/videoSeekLeft"
+        android:layout_width="160dp"
+        android:layout_height="160dp"
+        android:layout_gravity="start|center_vertical"
+        android:layout_marginStart="96dp"
+        android:background="@drawable/bg_yt_seek_hint"
+        android:gravity="center"
+        android:textColor="@color/text"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/videoSeekRight"
+        android:layout_width="160dp"
+        android:layout_height="160dp"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="96dp"
+        android:background="@drawable/bg_yt_seek_hint"
+        android:gravity="center"
+        android:textColor="@color/text"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <!-- YouTube 를 받는 동안 (0.66) -->
+    <ProgressBar
+        android:id="@+id/videoLoading"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:layout_gravity="center"
+        android:indeterminateTint="#FFFFFFFF"
+        android:visibility="gone" />
+
+    <!-- 화질 고르기 (0.81) — 바깥을 누르면 닫힘 -->
+    <FrameLayout
+        android:id="@+id/videoQualityScrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#66000000"
+        android:clickable="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/videoQualityPanel"
+            android:layout_width="360dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end|bottom"
+            android:layout_margin="24dp"
+            android:background="@drawable/bg_yt_panel"
+            android:clickable="true"
+            android:orientation="vertical"
+            android:paddingVertical="8dp" />
     </FrameLayout>
 </FrameLayout>

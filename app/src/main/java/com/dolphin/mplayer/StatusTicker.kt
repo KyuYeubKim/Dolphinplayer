@@ -73,6 +73,14 @@ class StatusTicker(private val ctx: Context) {
          * 재생 세션 읽기는 서비스가 붙어 있지 않아도 '알림 접근' 권한만 있으면 된다. main 스레드에서 부를 것.
          */
         private var shared: StatusTicker? = null
+
+        /** 영상 전체화면이 앞에 있으면 띠를 숨김 (영상을 가리지 않게, 0.81). main 스레드에서 */
+        var videoOnTop = false
+            set(v) {
+                if (field == v) return
+                field = v
+                shared?.render()
+            }
         private var owner = ""
 
         fun startShared(c: Context, by: String) {
@@ -158,9 +166,10 @@ class StatusTicker(private val ctx: Context) {
             val playing = hit?.value?.first
             val text = playing?.let { describe(it) }
             val canDraw = Settings.canDrawOverlays(ctx)
-            if (mode == Mode.OFF || text == null || !canDraw) hide() else show(mode, text)
+            if (mode == Mode.OFF || text == null || !canDraw || videoOnTop) hide() else show(mode, text)
             val state = when {
                 mode == Mode.OFF -> "꺼짐"
+                videoOnTop -> "영상 화면이라 숨김"
                 playing == null -> "재생 중인 앱 없음 (세션 ${watched.size}개)"
                 text == null -> "${playing.packageName} 곡 정보 없음"
                 !canDraw -> "다른 앱 위 권한 없음"

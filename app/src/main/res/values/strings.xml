@@ -268,4 +268,14 @@
     <string name="iradio_add_title">채널 추가 (지역 고르기)</string>
     <string name="iradio_basic">기본 채널 (KBS · MBC · SBS · CBS …)</string>
     <string name="iradio_count">%1$d / %2$d곳</string>
+    <!-- 영상 화면 (0.81) -->
+    <string name="video_quality">화질</string>
+    <string name="video_quality_default">%1$s (기본)</string>
+    <string name="video_quality_now">지금 화질: %1$s</string>
+    <string name="video_quality_note">높을수록 선명하지만 데이터를 더 씁니다</string>
+    <string name="video_back10">10초 뒤로</string>
+    <string name="video_fwd10">10초 앞으로</string>
+    <string name="video_seek_back">◀◀\n%1$d초</string>
+    <string name="video_seek_fwd">▶▶\n%1$d초</string>
+    <string name="video_live">● 실시간</string>
 </resources>
