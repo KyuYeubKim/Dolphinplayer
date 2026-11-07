@@ -17,7 +17,8 @@ import com.dolphin.mplayer.SwipeScrollView
 
 /**
  * 인터넷 라디오 화면 (0.78) — 플레이 화면의 앨범 이미지 자리에 ① 지금 방송 정보 카드 ② 채널 목록.
- * 카드: 프로그램 사진 · 방송 이름 · 주파수 · 프로그램 · 진행자 · 시간 · 제작진 · 소개 · 다음 프로그램 · 스트림 형식 · 스트림의 지금 곡.
+ * 카드 (0.84 부터 한 줄로 작게): 프로그램 사진 · 방송 이름 · 주파수 · 프로그램 · 진행자 · 시간 · 스트림의 지금 곡, 오른쪽 위에 다음 프로그램.
+ * 소개 · 제작진 · 스트림 형식은 카드를 누르면 나오는 방송 정보에서.
  * 채널: 로고 · 이름 · 주파수 · 지금 프로그램. 누르면 바로 그 방송.
  */
 class IRadioView(
@@ -131,8 +132,18 @@ class IRadioView(
                 addView(pic, LinearLayout.LayoutParams(dp(78), dp(78)).apply { marginEnd = dp(12) })
                 addView(LinearLayout(a).apply {
                     orientation = LinearLayout.VERTICAL
-                    addView(label("${s.name} · ${s.freqText}", 12.5f, a.getColor(R.color.accent), bold = true))
-                    addView(label(now?.title ?: s.about, 17f, text, bold = true, lines = 2))
+                    addView(LinearLayout(a).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        addView(label("${s.name} · ${s.freqText}", 12.5f, a.getColor(R.color.accent), bold = true), LinearLayout.LayoutParams(0, -2, 1f))
+                        info?.next?.let { n ->
+                            addView(label(a.getString(R.string.iradio_next, IRadioApi.hm(n.start), n.title +
+                                (n.dj.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")), 11.5f, 0xFFDCE4EE.toInt()).apply {
+                                maxWidth = dp(300)
+                            }, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(10) })
+                        }
+                    })
+                    addView(label(now?.title ?: s.about, 17f, text, bold = true))
                     listOfNotNull(
                         now?.dj?.takeIf { it.isNotBlank() }?.let { a.getString(R.string.iradio_dj, it) },
                         now?.timeText?.takeIf { it.isNotEmpty() },
@@ -141,16 +152,6 @@ class IRadioView(
                     else IRadioEngine.streamTitle?.let { "♪ $it" })?.let { addView(label(it, 13f, 0xFF6FB2FF.toInt())) }
                 }, LinearLayout.LayoutParams(0, -2, 1f))
             })
-            now?.subtitle?.takeIf { it.isNotBlank() }?.let { addView(label(it, 13f, 0xFFDCE4EE.toInt(), lines = 2).apply { setPadding(0, dp(8), 0, 0) }) }
-            now?.about?.takeIf { it.isNotBlank() }?.let { addView(label(it, 12.5f, dim, lines = 3).apply { setPadding(0, dp(6), 0, 0) }) }
-            now?.staff?.takeIf { it.isNotBlank() }?.let { addView(label(a.getString(R.string.iradio_staff, it), 12f, dim).apply { setPadding(0, dp(4), 0, 0) }) }
-            info?.next?.let { n ->
-                addView(label(a.getString(R.string.iradio_next, IRadioApi.hm(n.start), n.title +
-                    (n.dj.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")), 12.5f, 0xFFDCE4EE.toInt()).apply { setPadding(0, dp(6), 0, 0) })
-            }
-            IRadioEngine.streamFormat?.takeIf { IRadioEngine.station?.id == s.id }?.let {
-                addView(label(a.getString(R.string.iradio_stream, it), 11.5f, dim).apply { setPadding(0, dp(4), 0, 0) })
-            }
             setOnClickListener { onInfo(s) }
         }
     }
