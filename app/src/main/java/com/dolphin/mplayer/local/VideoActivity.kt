@@ -24,6 +24,8 @@ import com.dolphin.mplayer.R
  * 0.81 부터 YouTube 앱처럼: 화면을 누르면 어두워지며 가운데 재생 · 양옆 10초 버튼, 아래 빨간 재생 막대가 나오고
  * 재생 중이면 몇 초 뒤 사라진다 (멈춰 있으면 그대로). 양옆을 두 번 누르면 10초씩 이동, ⚙ 로 화질 (YouTube 만).
  * 나가면 USB 영상은 일시정지, YouTube 는 소리만 계속.
+ * DolphinControl 1.139~ 가 이 화면 이름(com.dolphin.mplayer.local.VideoActivity)으로 '영상'을 알아보고 분할을 영상 비율로 바꾼다
+ * (DC Prefs.DPLAYER_VIDEO) — 클래스 이름 · 패키지를 바꾸면 DC 도 같이.
  */
 class VideoActivity : Activity() {
 
