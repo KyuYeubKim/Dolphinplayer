@@ -360,6 +360,9 @@ class MainActivity : Activity() {
         sessionManager = getSystemService(MediaSessionManager::class.java)
         audioManager = getSystemService(AudioManager::class.java)
         images = ImageLoader(this)
+        val dcFilter = android.content.IntentFilter(DC_SPLIT_STATE)
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(dcSplitReceiver, dcFilter, Context.RECEIVER_EXPORTED)
+        else registerReceiver(dcSplitReceiver, dcFilter)
 
         setupPanel = findViewById(R.id.setupPanel)
         playerPanel = findViewById(R.id.playerPanel)
@@ -716,6 +719,27 @@ class MainActivity : Activity() {
             }
         }
         updateCarPanel()
+        sendVideoHint()
+    }
+
+    // ---- DolphinControl 에 영상 소스 알리기 (0.86) ----
+    // YouTube(영상) 목록을 보는 중이면 DC 가 분할을 영상 비율로 (영상 전체화면 VideoActivity 는 DC 가 화면 이름으로 앎).
+    // 약속: DolphinControl SplitManager.ACTION_VIDEO_HINT. 소스가 바뀔 때와 DC 분할 상태 방송을 받을 때마다 보냄 (DC 가 다시 켜져도 맞게)
+
+    private var videoHintSent: Boolean? = null
+
+    private fun isVideoSource() = listOpen && listMode == ListMode.YOUTUBE && ytVideoMode
+
+    private fun sendVideoHint(force: Boolean = false) {
+        val video = isVideoSource()
+        if (!force && video == videoHintSent) return
+        if (video != videoHintSent) YtLog.e("DolphinControl 에 알림: ${if (video) "영상" else "음악"} 소스")
+        videoHintSent = video
+        runCatching { sendBroadcast(Intent(DC_VIDEO_MODE).setPackage(CarPanel.DC_PKG).putExtra("video", video)) }
+    }
+
+    private val dcSplitReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) = sendVideoHint(force = true)
     }
 
     /**
@@ -1165,6 +1189,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(dcSplitReceiver) }
         runCatching { spCtlBrowser?.disconnect() }
         spCtlBrowser = null
         runCatching { btBrowser?.disconnect() }
@@ -2451,6 +2476,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        sendVideoHint(force = true)
         updateRailButtons() // 차에 생기거나 없어진 소스 반영
         // 설치 · 업데이트 뒤 처음: 이용 안내에 동의(카페 닉네임 포함)해야 권한 설정 · 재생을 시작한다 (0.58)
         if (!termsAgreed()) return showTerms(firstRun = true)
@@ -3706,6 +3732,9 @@ class MainActivity : Activity() {
         const val LOCAL_KEY = "dplayer.local"
         /** 플레이어 키: D-Player 안의 인터넷 라디오 (0.78) */
         const val IRADIO_KEY = "dplayer.iradio"
+        /** DolphinControl 분할: 영상 소스 알림(보냄) · 분할 상태 바뀜(받음) (0.86) */
+        const val DC_VIDEO_MODE = "com.dolphin.mplayer.action.VIDEO_MODE"
+        const val DC_SPLIT_STATE = "com.dolphin.control.action.SPLIT_STATE_CHANGED"
         /** 차의 블루투스 음악 플레이어 (AOSP Bluetooth 앱의 AVRCP 조정 세션) */
         const val BT_PKG = "com.android.bluetooth"
         const val MEDIA_PKG = "com.byd.mediacenter"
