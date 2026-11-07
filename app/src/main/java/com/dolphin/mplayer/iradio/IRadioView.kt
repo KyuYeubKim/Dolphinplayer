@@ -118,7 +118,7 @@ class IRadioView(
         return LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             background = bg(false)
-            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setPadding(dp(10), dp(8), dp(12), dp(8))
             addView(LinearLayout(a).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -129,27 +129,27 @@ class IRadioView(
                 }
                 val picUrl = now?.image?.takeIf { it.isNotEmpty() } ?: IRadioApi.logo(a, s) { later() }
                 if (picUrl != null) images.load(pic, null, Uri.parse(picUrl), R.drawable.ic_logo_iradio) else pic.setImageResource(R.drawable.ic_logo_iradio)
-                addView(pic, LinearLayout.LayoutParams(dp(78), dp(78)).apply { marginEnd = dp(12) })
+                addView(pic, LinearLayout.LayoutParams(dp(60), dp(60)).apply { marginEnd = dp(10) })
                 addView(LinearLayout(a).apply {
                     orientation = LinearLayout.VERTICAL
                     addView(LinearLayout(a).apply {
                         orientation = LinearLayout.HORIZONTAL
                         gravity = Gravity.CENTER_VERTICAL
-                        addView(label("${s.name} · ${s.freqText}", 12.5f, a.getColor(R.color.accent), bold = true), LinearLayout.LayoutParams(0, -2, 1f))
+                        addView(label("${s.name} · ${s.freqText}", 11.5f, a.getColor(R.color.accent), bold = true), LinearLayout.LayoutParams(0, -2, 1f))
                         info?.next?.let { n ->
                             addView(label(a.getString(R.string.iradio_next, IRadioApi.hm(n.start), n.title +
-                                (n.dj.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")), 11.5f, 0xFFDCE4EE.toInt()).apply {
-                                maxWidth = dp(300)
+                                (n.dj.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")), 13f, 0xFFDCE4EE.toInt()).apply {
+                                maxWidth = dp(320)
                             }, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(10) })
                         }
                     })
-                    addView(label(now?.title ?: s.about, 17f, text, bold = true))
+                    addView(label(now?.title ?: s.about, 15f, text, bold = true))
                     listOfNotNull(
                         now?.dj?.takeIf { it.isNotBlank() }?.let { a.getString(R.string.iradio_dj, it) },
                         now?.timeText?.takeIf { it.isNotEmpty() },
-                    ).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { addView(label(it, 13f, 0xFFDCE4EE.toInt())) }
+                    ).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { addView(label(it, 12f, 0xFFDCE4EE.toInt())) }
                     (if (IRadioEngine.trouble != null && IRadioEngine.station?.id == s.id) a.getString(R.string.iradio_reconnecting)
-                    else IRadioEngine.streamTitle?.let { "♪ $it" })?.let { addView(label(it, 13f, 0xFF6FB2FF.toInt())) }
+                    else IRadioEngine.streamTitle?.let { "♪ $it" })?.let { addView(label(it, 12f, 0xFF6FB2FF.toInt())) }
                 }, LinearLayout.LayoutParams(0, -2, 1f))
             })
             setOnClickListener { onInfo(s) }
