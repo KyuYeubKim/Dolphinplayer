@@ -21,6 +21,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.dolphin.mplayer.Loudness
 import com.dolphin.mplayer.R
 import com.dolphin.mplayer.youtube.YtService
 import java.io.File
@@ -367,7 +368,7 @@ object LocalEngine : YtService.Source {
     private fun ensurePlayer(context: Context): ExoPlayer {
         player?.let { return it }
         app = context.applicationContext
-        val p = ExoPlayer.Builder(app).build()
+        val p = ExoPlayer.Builder(app, Loudness.renderers(app, "usb", -3f)).build()
         // 오디오 포커스는 ExoPlayer 가 처리 (다른 앱이 재생하면 멈춤, 내비 안내 때 볼륨 낮춤), 이어폰/블루투스 해제 시 멈춤
         p.setAudioAttributes(
             AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true

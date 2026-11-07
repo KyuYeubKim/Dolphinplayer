@@ -19,6 +19,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.extractor.metadata.id3.TextInformationFrame
+import com.dolphin.mplayer.Loudness
 import com.dolphin.mplayer.youtube.YtLog
 import com.dolphin.mplayer.youtube.YtService
 import java.util.concurrent.Executors
@@ -183,7 +184,7 @@ object IRadioEngine : YtService.Source {
 
     private fun ensurePlayer(): ExoPlayer {
         player?.let { return it }
-        val p = ExoPlayer.Builder(app)
+        val p = ExoPlayer.Builder(app, Loudness.renderers(app, "radio", -2f))
             // 끊김에 대비해 넉넉히 (생방송은 끝에서 20초 뒤를 재생하므로 실제로는 그만큼)
             .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(30_000, 60_000, 1_500, 3_000).build())
             .build()

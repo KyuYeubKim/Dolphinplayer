@@ -132,6 +132,12 @@ class SettingsPanel(private val a: Activity, private val actions: Actions) {
                 intArrayOf(a.getColor(R.color.accent), 0xFFBDBDBD.toInt()))
             setOnCheckedChangeListener { _, on -> VolumeMemory.setEnabled(a, on) }
         }
+        val loudSwitch = Switch(a).apply {
+            isChecked = Loudness.isEnabled(a)
+            thumbTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                intArrayOf(a.getColor(R.color.accent), 0xFFBDBDBD.toInt()))
+            setOnCheckedChangeListener { _, on -> Loudness.setEnabled(a, on) }
+        }
         val favs = Favorites.list(a)
         val carSwitch = Switch(a).apply {
             isChecked = CarPanel.isEnabled(a)
@@ -162,6 +168,8 @@ class SettingsPanel(private val a: Activity, private val actions: Actions) {
                 }),
             row(icon(R.drawable.ic_music), s(R.string.set_vol_memory), s(R.string.set_vol_memory_desc),
                 trailing = volSwitch) { volSwitch.toggle() },
+            row(icon(R.drawable.ic_music), s(R.string.set_loudness), s(R.string.set_loudness_desc),
+                trailing = loudSwitch) { loudSwitch.toggle() },
             row(icon(R.drawable.ic_car), s(R.string.set_car_panel),
                 s(R.string.set_car_panel_desc) + if (!CarPanel.supported(a)) "\n" + s(R.string.set_car_panel_need) else "",
                 trailing = carSwitch) { carSwitch.toggle() },

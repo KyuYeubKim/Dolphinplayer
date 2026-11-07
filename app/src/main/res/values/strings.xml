@@ -221,6 +221,8 @@
     <string name="fav_full">즐겨찾기는 %1$d개까지예요. 재생 화면의 버튼을 길게 눌러 하나 빼 주세요</string>
     <string name="fav_local_missing">%1$s 폴더를 찾지 못했어요 (USB 를 꽂았는지 확인)</string>
     <string name="set_vol_memory">앱별 음량 기억</string>
+    <string name="set_loudness">음량 맞추기</string>
+    <string name="set_loudness_desc">YouTube Music · YouTube 영상 · 인터넷 라디오 · USB 소리 크기를 Spotify 와 비슷하게 맞춥니다. 곡이나 방송마다 크기가 달라도 고르게 들립니다</string>
     <string name="set_vol_memory_desc">Spotify · YouTube · USB · 블루투스를 바꿀 때 그 앱에서 쓰던 음량으로 맞춥니다</string>
     <!-- 차량 라디오 (0.65) -->
     <string name="radio_title">라디오</string>

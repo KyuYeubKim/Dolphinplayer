@@ -29,6 +29,7 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import com.dolphin.mplayer.Loudness
 import com.dolphin.mplayer.R
 import com.dolphin.mplayer.local.VideoActivity
 import com.dolphin.mplayer.local.VideoSource
@@ -493,7 +494,7 @@ object YtEngine : YtService.Source {
 
     private fun ensureMusic(): ExoPlayer {
         music?.let { return it }
-        val p = ExoPlayer.Builder(app)
+        val p = ExoPlayer.Builder(app, Loudness.renderers(app, "yt", -6f))
             .setMediaSourceFactory(DefaultMediaSourceFactory(cacheFactory(ensureCache())))
             .build()
         // 오디오 포커스는 ExoPlayer 가 처리 (다른 앱이 재생하면 멈춤 · 안내 음성 때 소리 줄임 · 통화 뒤 이어서)
@@ -706,7 +707,7 @@ object YtEngine : YtService.Source {
 
     private fun ensureVideo(): ExoPlayer {
         video?.let { return it }
-        val p = ExoPlayer.Builder(app).build()
+        val p = ExoPlayer.Builder(app, Loudness.renderers(app, "ytvideo", -6f)).build()
         p.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
         p.setHandleAudioBecomingNoisy(true)
         p.addListener(object : Player.Listener {
