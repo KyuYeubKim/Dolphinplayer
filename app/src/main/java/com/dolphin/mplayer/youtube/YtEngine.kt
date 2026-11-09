@@ -283,6 +283,16 @@ object YtEngine : YtService.Source {
         YtApi.browse(context, browseId, params).put("type", "browse").put("id", browseId)
     }
 
+    /** YouTube 영상 첫 화면 탭(맞춤 · 구독 · 기록) 첫 쪽 → "browse" (+ next: 이어 받기 표) */
+    fun requestFeed(context: Context, browseId: String) = request("browse") {
+        YtApi.feed(context, browseId).put("type", "browse").put("id", browseId)
+    }
+
+    /** 영상 첫 화면 이어 받기 → {type:"feedMore", id, items, next} */
+    fun requestFeedMore(context: Context, browseId: String, tokens: List<String>) = request("feedMore") {
+        YtApi.feedMore(context, tokens).put("type", "feedMore").put("id", browseId)
+    }
+
     /** 지금 재생 목록 → {type:"queue", list, items:[{videoId,title,subtitle,thumb,selected}]} */
     fun requestQueue(context: Context) {
         val idx = music?.currentMediaItemIndex ?: -1

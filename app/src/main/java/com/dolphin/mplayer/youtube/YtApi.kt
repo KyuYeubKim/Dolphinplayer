@@ -165,6 +165,71 @@ object YtApi {
     /** YouTube 영상 첫 화면: 맞춤 동영상 / 구독 / 기록 / 나중에 볼 동영상 */
     fun videoFeed(c: Context, browseId: String): JSONArray = shelves(call(c, "browse", JSONObject().put("browseId", browseId)))
 
+    /**
+     * YouTube 영상 첫 화면(맞춤 · 구독 · 기록)을 YouTube 앱처럼 한 줄로 이어지는 목록으로 (0.88).
+     * TV 데이터는 5개씩 든 가로 줄 4개(20개)만 먼저 오고, 줄마다 · 다음 줄 묶음마다 '이어 받기' 표가 붙어 있다 —
+     * 전에는 이 20개만 보여 줘서 추천이 적었다. → {shelves:[{title:"", items}], next:[이어 받기 표]}, 더 받기는 feedMore.
+     */
+    fun feed(c: Context, browseId: String): JSONObject {
+        val p = feedPage(call(c, "browse", JSONObject().put("browseId", browseId)))
+        return JSONObject().put("title", "").put("playlistId", "").put("next", p.getJSONArray("next"))
+            .put("shelves", JSONArray().put(JSONObject().put("title", "").put("items", p.getJSONArray("items"))))
+    }
+
+    private val pool = java.util.concurrent.Executors.newFixedThreadPool(4)
+
+    /** 이어 받기 표 여러 개를 동시에 받아 → {items, next}. 모두 실패하면 그 오류 */
+    fun feedMore(c: Context, tokens: List<String>): JSONObject {
+        val jobs = tokens.map { t ->
+            pool.submit(java.util.concurrent.Callable { runCatching { feedPage(call(c, "browse", JSONObject().put("continuation", t))) } })
+        }
+        val items = JSONArray()
+        val next = JSONArray()
+        var error: Throwable? = null
+        var ok = 0
+        for (j in jobs) j.get().onSuccess { p ->
+            ok++
+            p.getJSONArray("items").let { a -> for (i in 0 until a.length()) items.put(a.get(i)) }
+            p.getJSONArray("next").let { a -> for (i in 0 until a.length()) next.put(a.get(i)) }
+        }.onFailure { error = it }
+        if (ok == 0) error?.let { throw it }
+        return JSONObject().put("items", items).put("next", next)
+    }
+
+    /** 한 응답 → 영상(줄 순서대로 펼침, 썸네일은 큰 것으로) + 이어 받기 표 (줄마다 → 다음 줄 묶음 순) */
+    private fun feedPage(resp: JSONObject): JSONObject {
+        // 이어 받기 응답은 새 부분(continuationContents)만 — 기록 탭은 첫 쪽(contents)을 함께 다시 보내 같은 15개만 되풀이됐음
+        val r = resp.optJSONObject("continuationContents") ?: resp
+        val shelfList = find(r, "shelfRenderer").filter { s ->
+            text(s.optJSONObject("headerRenderer")?.optJSONObject("shelfHeaderRenderer")?.opt("title")).trim() != "Shorts"
+        }
+        val list = if (shelfList.isNotEmpty()) shelfList.flatMap { collect(it.opt("content")) }
+        else collect(r.opt("contents") ?: r)
+        val items = JSONArray()
+        val seen = HashSet<String>()
+        for (it in list) {
+            val vid = it.optString("videoId")
+            // 같은 영상이 여러 줄에 (재생목록 표만 달리해) 들어 있음 → 한 번만
+            if (!seen.add(if (vid.isNotEmpty()) vid else it.optString("playlistId") + it.optString("browseId"))) continue
+            // 구독 채널 줄은 YouTube 앱 홈처럼 영상 목록에 넣지 않음
+            if (it.optString("kind") == "browse" && it.optString("browseId").startsWith("UC")) continue
+            // TV 썸네일은 320×180 이라 큰 카드에서 흐림 → 480×360 (위아래 검은 띠는 16:9 로 잘려 안 보임)
+            if (it.optString("kind") == "song" && vid.length == 11) it.put("thumb", "https://i.ytimg.com/vi/$vid/hqdefault.jpg")
+            items.put(it)
+        }
+        val tokens = LinkedHashSet<String>()
+        for (k in listOf("horizontalListRenderer", "horizontalListContinuation", "gridRenderer", "gridContinuation",
+            "sectionListRenderer", "sectionListContinuation")) find(r, k).forEach { o -> nextToken(o)?.let(tokens::add) }
+        return JSONObject().put("items", items).put("next", JSONArray(tokens.toList()))
+    }
+
+    private fun nextToken(o: JSONObject): String? {
+        val a = o.optJSONArray("continuations") ?: return null
+        return (0 until a.length()).firstNotNullOfOrNull {
+            a.optJSONObject(it)?.optJSONObject("nextContinuationData")?.optString("continuation")?.takeIf { s -> s.isNotEmpty() }
+        }
+    }
+
     // ---------- 해석 ----------
 
     /** 응답 안의 칸들. 칸 제목이 없는 묶음(보관함 격자 · 재생목록)도 칸 하나로 */
@@ -244,11 +309,15 @@ object YtApi {
             (0 until ov.length()).firstNotNullOfOrNull { text(ov.optJSONObject(it)?.optJSONObject("thumbnailOverlayTimeStatusRenderer")?.opt("text")).takeIf { s -> s.isNotEmpty() } }
         }
         val thumb = thumb(header?.optJSONObject("thumbnail")?.optJSONArray("thumbnails"))
+        // 본 만큼 (YouTube 처럼 썸네일 아래 빨간 막대, 0.88)
+        val watched = header?.optJSONArray("thumbnailOverlays")?.let { ov ->
+            (0 until ov.length()).firstNotNullOfOrNull { ov.optJSONObject(it)?.optJSONObject("thumbnailOverlayResumePlaybackRenderer")?.optInt("percentDurationWatched") }
+        } ?: 0
         val subtitle = (parts.take(1) + listOfNotNull(duration)).joinToString(" · ")
         return endpoint(t.optJSONObject("onSelectCommand"), t.optString("contentType"), t.optString("contentId"))
             ?.put("title", title)?.put("subtitle", subtitle)?.put("thumb", thumb)
             // 영상 카드용: 모든 줄(채널 · 조회수 · 올린 때)과 길이를 따로
-            ?.put("info", parts.joinToString(" · "))?.put("duration", duration.orEmpty())
+            ?.put("info", parts.joinToString(" · "))?.put("duration", duration.orEmpty())?.put("watched", watched)
     }
 
     private fun lockup(l: JSONObject): JSONObject? {

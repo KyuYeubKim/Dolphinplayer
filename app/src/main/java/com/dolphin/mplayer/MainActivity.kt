@@ -81,6 +81,7 @@ class MainActivity : Activity() {
         val extra: String? = null, // YouTube Music: 곡이 속한 재생목록 id / 둘러보기 params
         val cards: List<Row> = emptyList(), // YT_GRID: 이 줄에 놓이는 영상 카드
         val badge: String = "", // 영상 카드: 썸네일 위 길이 (12:34)
+        val progress: Int = 0, // 영상 카드: 본 만큼 (%, 썸네일 아래 빨간 막대)
     )
 
     /** 라이브러리 폴더 id → 그 폴더 자체를 재생할 수 있는지 (전체 재생에 사용) */
@@ -168,6 +169,13 @@ class MainActivity : Activity() {
     private var ytVideoMode = false
     /** YouTube 영상 첫 화면에서 고른 탭 (browse id) */
     private var ytVideoTab = "FEwhat_to_watch"
+    /** 영상 첫 화면 탭마다: 남은 이어 받기 표 · 받는 중 · 첫 쪽을 받은 때 (0.88) */
+    private val ytFeedNext = HashMap<String, ArrayDeque<String>>()
+    private val ytFeedLoading = HashSet<String>()
+    private val ytFeedAt = HashMap<String, Long>()
+    /** 이미 쓴 이어 받기 표 · 새 영상 없이 끝난 횟수 (같은 표를 되풀이하거나 빈 쪽만 오면 멈춤) */
+    private val ytFeedUsed = HashMap<String, HashSet<String>>()
+    private val ytFeedEmpty = HashMap<String, Int>()
     /** 영상 카드 한 줄의 칸 수 (목록 폭으로 정함, 분할 · 전체화면이 바뀌면 다시 나눔) */
     private var ytGridCols = 0
     /**
@@ -516,6 +524,13 @@ class MainActivity : Activity() {
         listView.adapter = adapter
         listView.setOnItemClickListener { _, _, pos, _ -> onRowClick(rows[pos]) }
         listView.setOnItemLongClickListener { _, _, pos, _ -> onRowLongClick(rows[pos]) }
+        // YouTube 영상 첫 화면: 끝 가까이 내리면 영상을 더 받아 이어 붙임 (YouTube 앱처럼 끝없이, 0.88)
+        listView.setOnScrollListener(object : android.widget.AbsListView.OnScrollListener {
+            override fun onScrollStateChanged(view: android.widget.AbsListView?, state: Int) = Unit
+            override fun onScroll(view: android.widget.AbsListView?, first: Int, visible: Int, total: Int) {
+                if (total > 0 && first + visible >= total - 3 && ytVideoMode && listMode == ListMode.YOUTUBE) loadMoreFeed()
+            }
+        })
         // 목록 폭이 바뀌면(분할 ↔ 전체화면) 영상 카드를 새 칸 수로 다시 나눔
         listView.addOnLayoutChangeListener { _, l, _, r, _, _, _, _, _ ->
             if (rows.any { it.kind == Kind.YT_GRID } && gridCols(r - l) != ytGridCols) listView.post {
@@ -2135,7 +2150,25 @@ class MainActivity : Activity() {
             else -> listOf(Row(Kind.YT_HEADER, getString(R.string.loading)))
         }
         setRows(listOf(tabs) + body, "")
-        if (request) YtEngine.requestBrowse(this, ytVideoTab)
+        setHeader(YtEngine.Site.VIDEO.label, logo = true)
+        if (!request) return
+        // 맞춤 · 구독 · 기록은 5분 동안은 받아 둔 것(이어 받은 것까지)을 그대로 — 다시 열 때마다 처음 20개로 줄지 않게
+        if (!ytVideoTab.startsWith("FE")) return YtEngine.requestBrowse(this, ytVideoTab)
+        val at = ytFeedAt[ytVideoTab]
+        if (page == null || at == null || SystemClock.elapsedRealtime() - at > 5 * 60_000) YtEngine.requestFeed(this, ytVideoTab)
+    }
+
+    /** 영상 첫 화면 목록 끝 가까이 오면 이어 받기 (표 4개씩 동시에) */
+    private fun loadMoreFeed() {
+        if (!(listOpen && listMode == ListMode.YOUTUBE && ytVideoMode && ytTop == null)) return
+        val tab = ytVideoTab
+        val q = ytFeedNext[tab] ?: return
+        if (q.isEmpty() || tab in ytFeedLoading || (ytFeedEmpty[tab] ?: 0) >= 2) return
+        ytFeedLoading.add(tab)
+        val used = ytFeedUsed.getOrPut(tab) { HashSet() }
+        val batch = List(minOf(4, q.size)) { q.removeFirst() }.filter { used.add(it) }
+        if (batch.isEmpty()) { ytFeedLoading.remove(tab); return loadMoreFeed() }
+        YtEngine.requestFeedMore(this, tab, batch)
     }
 
     private fun selectYtVideoTab(id: String) {
@@ -2201,7 +2234,8 @@ class MainActivity : Activity() {
                 val badge = if (ytVideoMode) it.optString("duration") else ""
                 out.add(when (it.optString("kind")) {
                     "song" -> Row(Kind.YT_SONG, title, sub, id = it.optString("videoId"), iconUri = icon,
-                        extra = it.optString("playlistId").ifEmpty { null }, badge = badge)
+                        extra = it.optString("playlistId").ifEmpty { null }, badge = badge,
+                        progress = if (ytVideoMode) it.optInt("watched") else 0)
                     "list" -> Row(Kind.YT_LIST, title, sub, id = it.optString("playlistId"), iconUri = icon)
                     else -> Row(Kind.YT_BROWSE, title, sub, id = it.optString("browseId"), iconUri = icon,
                         extra = it.optString("params").ifEmpty { null })
@@ -2421,10 +2455,40 @@ class MainActivity : Activity() {
                 val type = if (msg.optString("type") == "search") YtPageType.SEARCH else YtPageType.BROWSE
                 val id = msg.optString(if (type == YtPageType.SEARCH) "query" else "id")
                 ytPageCache[type.name + ":" + id] = msg
+                msg.optJSONArray("next")?.let { a ->
+                    ytFeedNext[id] = ArrayDeque((0 until a.length()).map { a.optString(it) })
+                    ytFeedLoading.remove(id)
+                    ytFeedUsed.remove(id)
+                    ytFeedEmpty.remove(id)
+                    ytFeedAt[id] = SystemClock.elapsedRealtime()
+                }
                 if (ytPageCache.size > 30) ytPageCache.keys.firstOrNull()?.let { ytPageCache.remove(it) }
                 val top = ytTop
                 if (inYtList && top != null && top.type == type && top.id == id) showYtShelves(top, msg)
-                if (inYtList && top == null && ytVideoMode && type == YtPageType.BROWSE && id == ytVideoTab) showYtVideoRoot(request = false)
+                if (inYtList && top == null && ytVideoMode && type == YtPageType.BROWSE && id == ytVideoTab) {
+                    showYtVideoRoot(request = false)
+                    if (msg.has("next")) listView.post { loadMoreFeed() } // 첫 20개로는 화면이 덜 차서 바로 한 번 더
+                }
+            }
+            "feedMore" -> {
+                val id = msg.optString("id")
+                ytFeedLoading.remove(id)
+                val items = ytPageCache[YtPageType.BROWSE.name + ":" + id]?.optJSONArray("shelves")?.optJSONObject(0)?.optJSONArray("items")
+                    ?: return
+                fun key(o: org.json.JSONObject?) = o?.let { it.optString("videoId").ifEmpty { it.optString("playlistId") + it.optString("browseId") } }
+                val seen = (0 until items.length()).mapTo(HashSet()) { key(items.optJSONObject(it)) }
+                val more = msg.optJSONArray("items") ?: org.json.JSONArray()
+                var added = 0
+                for (i in 0 until more.length()) more.optJSONObject(i)?.takeIf { seen.add(key(it)) }?.let { items.put(it); added++ }
+                ytFeedEmpty[id] = if (added == 0) (ytFeedEmpty[id] ?: 0) + 1 else 0
+                val next = msg.optJSONArray("next")
+                if (next != null) ytFeedNext.getOrPut(id) { ArrayDeque() }.addAll((0 until next.length()).map { next.optString(it) })
+                YtLog.e("YouTube 영상 이어 받기 ($id): +$added · 모두 ${items.length()}개 · 남은 표 ${ytFeedNext[id]?.size ?: 0}")
+                if (inYtList && ytTop == null && ytVideoMode && id == ytVideoTab) {
+                    showYtVideoRoot(request = false)
+                    // 새로 붙은 게 없거나 아직 화면이 덜 찼으면 이어서
+                    listView.post { if (added == 0 || listView.lastVisiblePosition >= rows.size - 3) loadMoreFeed() }
+                }
             }
             "library" -> if (inYtList && ytTop?.type == YtPageType.MYLIB) {
                 val items = msg.optJSONArray("items")
@@ -2471,6 +2535,7 @@ class MainActivity : Activity() {
                         toast(getString(R.string.yt_load_failed, msg.optString("message")).substringBefore('\n'))
                     else showYtVideoRoot(request = false, failed = msg.optString("message"))
                 }
+                "feedMore" -> ytFeedLoading.clear() // 다음에 끝으로 내리면 다시 시도
                 "library", "playlist", "queue", "search", "browse" -> if (listOpen && (inYtList || listMode == ListMode.YT_QUEUE)) {
                     if (inYtList && ytTop != null && rows.size > 1) toast(getString(R.string.yt_load_failed, msg.optString("message")))
                     else setRows(listOfNotNull(ytTop?.let { Row(Kind.UP, getString(R.string.go_up)) }),
@@ -3568,8 +3633,12 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun setHeader(text: String) {
+    /** 목록 제목. logo = YouTube 영상 첫 화면 (제목 앞에 YouTube 표시) */
+    private fun setHeader(text: String, logo: Boolean = false) {
         listHeader.text = text
+        val start = if (logo) getDrawable(R.drawable.ic_logo_youtube)?.apply { setBounds(0, 0, dp(34), dp(34)) } else null
+        val end = listHeader.compoundDrawablesRelative[2]
+        listHeader.setCompoundDrawablesRelative(start, null, end, null)
     }
 
     private fun setRows(items: List<Row>, emptyMessage: String) {
@@ -3604,8 +3673,12 @@ class MainActivity : Activity() {
         val cols = maxOf(ytGridCols, 1)
         val line = (convertView as? LinearLayout)?.takeIf { it.childCount == cols } ?: LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(14), dp(4), dp(14), dp(8))
-            repeat(cols) { addView(layoutInflater.inflate(R.layout.item_video_card, this, false)) }
+            setPadding(dp(12), 0, dp(12), dp(14))
+            repeat(cols) {
+                addView(layoutInflater.inflate(R.layout.item_video_card, this, false).apply {
+                    findViewById<View>(R.id.cardFrame).clipToOutline = true // 둥근 모서리 (XML 속성은 Android 12 부터라 차에선 안 먹음)
+                })
+            }
         }
         for (i in 0 until cols) {
             val card = line.getChildAt(i)
@@ -3620,6 +3693,16 @@ class MainActivity : Activity() {
             card.findViewById<TextView>(R.id.cardBadge).apply {
                 text = r.badge
                 visibility = if (r.badge.isEmpty()) View.GONE else View.VISIBLE
+                // 생방송은 YouTube 처럼 빨간 표시
+                val live = r.badge == "라이브" || r.badge.equals("LIVE", true) || r.badge == "실시간"
+                setBackgroundResource(if (live) R.drawable.bg_video_badge_live else R.drawable.bg_video_badge)
+            }
+            card.findViewById<LinearLayout>(R.id.cardProgress).apply {
+                val pct = r.progress.coerceIn(0, 100)
+                visibility = if (pct > 0) View.VISIBLE else View.GONE
+                (getChildAt(0).layoutParams as LinearLayout.LayoutParams).weight = pct.toFloat()
+                (getChildAt(1).layoutParams as LinearLayout.LayoutParams).weight = (100 - pct).toFloat()
+                requestLayout()
             }
             images.load(card.findViewById(R.id.cardThumb), r.icon, r.iconUri, 0)
             card.setOnClickListener { onRowClick(r) }
@@ -3633,27 +3716,29 @@ class MainActivity : Activity() {
         val bar = convertView as? android.widget.HorizontalScrollView ?: android.widget.HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             clipToPadding = false
-            setPadding(dp(20), dp(10), dp(20), dp(8))
+            setPadding(dp(20), dp(8), dp(20), dp(14))
             val strip = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
             YT_VIDEO_TABS.forEach { (id, label) ->
                 strip.addView(TextView(this@MainActivity).apply {
                     tag = id
                     text = getString(label)
-                    textSize = 17f
+                    textSize = 16f
+                    typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
                     gravity = android.view.Gravity.CENTER
-                    setTextColor(getColorStateList(R.color.chip_text))
-                    background = getDrawable(R.drawable.bg_chip)
-                    setPadding(dp(18), 0, dp(18), 0)
+                    // YouTube 앱의 주제 칩처럼: 고른 것은 흰 바탕 · 검은 글자, 나머지는 회색 (0.88)
+                    setTextColor(getColorStateList(R.color.yt_chip_text))
+                    background = getDrawable(R.drawable.bg_yt_chip)
+                    setPadding(dp(16), 0, dp(16), 0)
                     if (id == "search") {
                         getDrawable(R.drawable.ic_search)?.mutate()?.let { d ->
                             d.setBounds(0, 0, dp(22), dp(22))
-                            d.setTintList(getColorStateList(R.color.chip_text))
+                            d.setTintList(getColorStateList(R.color.yt_chip_text))
                             setCompoundDrawablesRelative(d, null, null, null)
                             compoundDrawablePadding = dp(6)
                         }
                     }
                     setOnClickListener { selectYtVideoTab(id) }
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(44)).apply { marginEnd = dp(10) })
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)).apply { marginEnd = dp(10) })
             }
             addView(strip)
         }

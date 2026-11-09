@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- YouTube 영상 첫 화면 탭 칩 (YouTube 앱 주제 칩처럼: 고른 것 흰 바탕, 나머지 회색) -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#33FFFFFF">
+    <item>
+        <selector>
+            <item android:state_activated="true">
+                <shape><solid android:color="#FFF1F1F1" /><corners android:radius="8dp" /></shape>
+            </item>
+            <item>
+                <shape><solid android:color="#FF272727" /><corners android:radius="8dp" /></shape>
+            </item>
+        </selector>
+    </item>
+</ripple>
