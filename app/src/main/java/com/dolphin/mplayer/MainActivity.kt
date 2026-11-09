@@ -243,8 +243,16 @@ class MainActivity : Activity() {
     private fun rememberOtherApps() {
         otherPlaying.clear()
         activeSessions().filter { key(it) != pinned() }
-            .forEach { otherPlaying[key(it)] = it.playbackState?.state == PlaybackState.STATE_PLAYING }
+            .forEach {
+                val st = it.playbackState?.state
+                otherPlaying[key(it)] = st == PlaybackState.STATE_PLAYING || isTransient(st)
+            }
     }
+
+    /** 재생 중에 잠깐 거치는 상태 (버퍼링 · 연결 중 · 곡 넘기는 중) */
+    private fun isTransient(st: Int?) = st == PlaybackState.STATE_BUFFERING || st == PlaybackState.STATE_CONNECTING ||
+        st == PlaybackState.STATE_SKIPPING_TO_NEXT || st == PlaybackState.STATE_SKIPPING_TO_PREVIOUS ||
+        st == PlaybackState.STATE_SKIPPING_TO_QUEUE_ITEM
 
     /** 버튼/목록으로 고른(고정한) 플레이어 앱. null = 재생 중인 앱을 자동으로 따름 */
     private fun pinned(): String? = prefs.getString("pinned", null)
@@ -280,6 +288,9 @@ class MainActivity : Activity() {
         val pinnedPkg = pinned() ?: return
         for (c in activeSessions()) {
             if (key(c) == pinnedPkg) continue
+            // 잠깐 끊겼다 다시 붙는 중(버퍼링 · 곡 넘김)은 이전 상태 그대로 (0.87): 뒤에서 듣던 인터넷 라디오가 끊겼다 다시 이어질 때
+            // '멈춤 → 재생' 으로 잘못 보고 고른 플레이어(YT Music 등)를 라디오로 되돌리던 문제
+            if (isTransient(c.playbackState?.state)) continue
             val now = c.playbackState?.state == PlaybackState.STATE_PLAYING
             val before = otherPlaying.put(key(c), now)
             if (now && before == false) { // 멈춤 → 재생으로 바뀐 경우만 (처음 보는 상태는 기록만)

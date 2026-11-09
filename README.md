@@ -25,7 +25,7 @@ CPU(ABI)별 이름으로 APK 를 만든다 (각 약 5MB — 0.65 까지는 Gecko
 | arm | `.../arm/release/app-arm-release.apk` → `D-Player-<버전>-armv7.apk` | 32비트 차량 |
 | x64 | `.../x64/release/app-x64-release.apk` → `D-Player-<버전>-x64.apk` | 에뮬레이터 시험용 (배포 안 함) |
 
-차량에는 `dist/D-Player-0.86-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
+차량에는 `dist/D-Player-0.87-arm64.apk` 를 사이드로드. 이후에는 앱이 자동 업데이트한다.
 
 ## 권한: 알림 접근 (자동)
 
@@ -88,6 +88,7 @@ adb shell cmd notification allow_listener com.dolphin.mplayer/.MediaListenerServ
 - **인터넷 라디오 채널 편집 · 지역 방송 (0.80)**: 내 채널 = prefs `iradio` 의 `mine`(쉼표, 즐겨찾기가 앞) · `favorites`, 처음엔 기본 18곳. 다음/이전은 즐겨찾기가 둘 이상이면 즐겨찾기끼리(`IRadioApi.stepList`), 세션 재생 목록도 내 채널. 지역 방송 약 140곳은 `iradio/IRadioRegions.kt`(radio.bsod.kr 정리를 참고해 2026-11-03 PC · 에뮬레이터에서 열리는 것만): KBS 지역국은 콩 API `지역코드_채널코드`(media_type=local) + 편성표 `local_station_code`, 부산MBC 는 날짜 글자 주소(`Source.BusanMbc`), 나머지 고정 주소. http 로만 열리는 9곳은 `res/xml/network_security_config.xml` 에서 그 호스트만 허용. 제주MBC 는 인증서 체인이 빠져 Android 에서 안 열려 뺌. 로고가 없는 방송은 캐시 폴더에 방송사 이름 그림(`IRadioApi.badge`).
 - **YouTube 영상 화면 (0.81)**: `local/VideoActivity` 를 YouTube 앱처럼 — 누르면 어두운 막 + 가운데 재생 · 양옆 10초, 아래 빨간 막대(받아 둔 곳 = secondaryProgress), 양옆 두 번 누르기 10초씩(이어서 누르면 더함), 재생 중일 때만 4초 뒤 숨김. 화질은 기본 360p(prefs `player` 의 `yt_video_height`, 720/480/360/240/144), ⚙ 로 바꾸면 `YtEngine.setVideoQuality` 가 같은 위치에서 새 주소로(영상 정보는 `YtStreams` 가 30분 기억해 바로 바뀜). 같은 높이면 30fps 우선. 영상 화면이 앞에 있으면 `StatusTicker.videoOnTop` 으로 띠를 숨김. USB 영상은 같은 화면이고 화질 버튼만 없음.
 - **영상 소스 알림 (0.86)**: YouTube(영상) 목록이 열려 있으면(`isVideoSource` = listOpen · YOUTUBE · ytVideoMode) `com.dolphin.mplayer.action.VIDEO_MODE`(extra `video`) 를 DolphinControl 로 보냄 → DC 1.141~ 가 분할을 영상 비율로. 바뀔 때 · onResume · DC 의 `SPLIT_STATE_CHANGED` 를 받을 때마다 보냄. 영상 전체화면(VideoActivity)은 DC 가 화면 이름으로 앎.
+- **다른 앱 재생 따라가기 (0.87)**: `watchOtherApps` 는 버퍼링 · 연결 중 · 곡 넘김 상태를 건너뛰고 이전 상태를 유지 (`isTransient`). 뒤에서 듣던 인터넷 라디오가 끊겼다 다시 이어질 때 고른 플레이어가 라디오로 되돌아가던 문제.
 - **음량 맞추기 (0.83)**: `Loudness.kt` 의 ExoPlayer 오디오 처리기(`DefaultRenderersFactory.buildAudioSink` 에 끼움)가 재생 직전 소리를 BS.1770 K 가중으로 재서 Spotify 음량 평준화 '보통'(-14 LUFS)에 맞춤. YouTube 원곡은 -5~-9 LUFS 라 5~9dB 줄어듦. 긴 평균 약 10초(조용한 곳 제외), 줄일 땐 빠르게 · 올릴 땐 천천히(최대 +6dB), 엔진별(yt · ytvideo · radio · usb) 이득을 기억해 다음 시동 첫 곡부터. 설정 → 재생 '음량 맞추기'(기본 켬).
 - **재생 정보 띠 (0.80)**: 띠는 앱에 하나(`StatusTicker.startShared`). 알림 접근 서비스가 연결되면 거기서, 시동 뒤 서비스가 안 붙으면(차에서 다시 연결 요청이 안 먹힐 때가 있음) D-Player 화면이 열릴 때 앱에서 시작 — 세션 읽기는 권한만 있으면 됨. 서비스 연결이 끊겨도 권한이 남아 있으면 띠는 그대로.
 - **재생 중 차량 제어 패널 (0.61~)**(설정 → 재생): 재생 중 앨범 이미지 자리에 DolphinControl 하단바에서 고른 기능(열선 · 창문 · 에어컨). 좌우로 밀면 앨범 이미지 ↔ 패널 (0.71, 앨범 이미지 줄 · 제목 줄 어디서든 0.72). 창문은 한 번 누름, 썬쉐이드는 길게 누름.
