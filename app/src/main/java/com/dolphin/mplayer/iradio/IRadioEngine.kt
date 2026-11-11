@@ -64,6 +64,7 @@ object IRadioEngine : YtService.Source {
     private var wanted = false
     private var retries = 0
     private var startSeq = 0
+    private var lastLiveSnap = 0L
 
     override val playing: Boolean get() = player?.isPlaying == true
     override val label: String get() = "인터넷 라디오"
@@ -216,6 +217,15 @@ object IRadioEngine : YtService.Source {
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                // 생방송 창 뒤로 밀림(잠깐 버벅인 뒤 흔함): 주소는 그대로 쓰고 바로 지금 방송 위치로 (0.89 — 예전엔 2초 쉬고 주소부터 다시)
+                // 1분 안에 또 나면 평소처럼 주소부터 다시 받음
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW && wanted && now - lastLiveSnap > 60_000) {
+                    lastLiveSnap = now
+                    YtLog.e("인터넷 라디오 생방송 위치로 바로 맞춤 (${station?.name})")
+                    player?.apply { seekToDefaultPosition(); prepare(); play() }
+                    return
+                }
                 retry(error.errorCodeName.removePrefix("ERROR_CODE_").lowercase())
             }
 
