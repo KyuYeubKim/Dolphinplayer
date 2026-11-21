@@ -209,11 +209,32 @@
             android:paddingTop="60dp"
             android:paddingBottom="16dp">
 
-            <!-- 재생 앱 -->
+            <!-- 재생 앱 (가운데) + 지금 시각 (오른쪽 빈자리, 0.90) -->
+            <FrameLayout
+                android:id="@+id/sourceRow"
+                android:layout_width="match_parent"
+                android:layout_height="40dp">
+
+            <TextClock
+                android:id="@+id/clock"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_gravity="end|center_vertical"
+                android:fontFamily="sans-serif-medium"
+                android:format12Hour="h:mm"
+                android:format24Hour="H:mm"
+                android:gravity="center_vertical|end"
+                android:includeFontPadding="false"
+                android:paddingEnd="4dp"
+                android:singleLine="true"
+                android:textColor="@color/text"
+                android:textSize="28sp" />
+
             <LinearLayout
                 android:id="@+id/btnSource"
                 android:layout_width="wrap_content"
                 android:layout_height="40dp"
+                android:layout_gravity="center_horizontal"
                 android:background="?android:attr/selectableItemBackground"
                 android:contentDescription="@string/cd_source"
                 android:gravity="center_vertical"
@@ -244,6 +265,7 @@
                     android:layout_marginStart="6dp"
                     android:src="@drawable/ic_swap" />
             </LinearLayout>
+            </FrameLayout>
 
             <ImageView
                 android:id="@+id/cover"

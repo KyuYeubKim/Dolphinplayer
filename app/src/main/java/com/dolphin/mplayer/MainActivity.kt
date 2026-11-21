@@ -471,7 +471,7 @@ class MainActivity : Activity() {
         IRadioEngine.listener = { onIRadioChanged() }
         favRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         (playerContent as LinearLayout).addView(favRow,
-            (playerContent as LinearLayout).indexOfChild(findViewById(R.id.btnSource)) + 1,
+            (playerContent as LinearLayout).indexOfChild(findViewById(R.id.sourceRow)) + 1,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(40)).apply { topMargin = dp(6) })
         renderFavorites()
         coverSpaceTop = View(this).apply { visibility = View.GONE }
